@@ -1,11 +1,14 @@
 import argparse
 import json
 import string
+import os
 from collections import Counter
 import h5py
 import numpy as np
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
+from threading import Thread, Lock
+from queue import Queue, Empty
 
 # special tokens
 TokenUnk = '<UNK>'
@@ -115,18 +118,42 @@ def encode_images_captions(data, word_to_id, max_sentence_len):
     return result
 
 
-def add_images_data(h5_file, filenames, num_processed_images, images_folder):
+def add_images_data(h5_file, filenames, num_processed_images, images_folder, image_work_threads_count):
     filenames_slice = filenames[:num_processed_images]
 
     image_dset = h5_file.create_dataset('images', shape=(num_processed_images, 224, 224, 3))
+
+    num_workers = max(1, min(image_work_threads_count, num_processed_images / 10))
+    lock = Lock()
+    q = Queue()
+
     for index, cur_filename in enumerate(filenames_slice):
-        full_filename = images_folder + '/' + cur_filename
-        img = image.load_img(full_filename, target_size=(224, 224))
-        x = image.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
-        x = np.squeeze(x)
-        image_dset[index, :, :, :] = x
+        fname = os.path.join(images_folder, cur_filename)
+        q.put((index, fname))
+
+    def worker():
+        while True:
+            try:
+                index, filename = q.get(block=False)
+            except Empty:
+                break
+
+            img = image.load_img(filename, target_size=(224, 224))
+            x = image.img_to_array(img)
+            x = np.expand_dims(x, axis=0)
+            x = preprocess_input(x)
+            x = np.squeeze(x)
+
+            with lock:
+                image_dset[index, :, :, :] = x
+
+            q.task_done()
+
+    for worker_index in range(num_workers):
+        t = Thread(target=worker)
+        t.start()
+
+    q.join()
 
 
 def preprocess(args):
@@ -134,13 +161,13 @@ def preprocess(args):
     vocab = build_vocab(filtered_images_info, args.min_token_instances)
 
     word_to_id, id_to_word = build_vocab_to_id(vocab)
-    with open(args.output_dir + '/word_to_id.json', 'w') as f:
+    with open(os.path.join(args.output_dir, 'word_to_id.json'), 'w') as f:
         json.dump(word_to_id, f)
-    with open(args.output_dir + '/id_to_word.json', 'w') as f:
+    with open(os.path.join(args.output_dir, 'id_to_word.json'), 'w') as f:
         json.dump(id_to_word, f)
 
     encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, args.max_sentence_length)
-    with open(args.output_dir + '/id_to_img.json', 'w') as f:
+    with open(os.path.join(args.output_dir, 'id_to_img.json'), 'w') as f:
         json.dump({ind: val[0] for ind, val in enumerate(encoded_images_info)}, f)
 
     num_images = len(encoded_images_info)
@@ -154,12 +181,12 @@ def preprocess(args):
     sentence_to_img = np.asarray([x[0] for x in sentences_data], dtype=np.int32)
     sentences_len = np.array([x[1] for x in sentences_data], dtype=np.int32)
     sentences_array = np.array([x[2] for x in sentences_data], dtype=np.int32)
-    with h5py.File(args.output_dir + '/preprocessed.h5', 'w') as h5_file:
+    with h5py.File(os.path.join(args.output_dir, 'preprocessed.h5'), 'w') as h5_file:
         h5_file.create_dataset('sentences_to_img', data=sentence_to_img)
         h5_file.create_dataset('sentences_len', data=sentences_len)
         h5_file.create_dataset('sentences', data=sentences_array)
 
-        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, args.images_folder)
+        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, args.images_folder, args.image_work_threads)
 
 
 if __name__ == '__main__':
@@ -177,6 +204,9 @@ if __name__ == '__main__':
                         default=10, type=int)
     parser.add_argument('--images_folder',
                         default="data/train2014")
+    parser.add_argument('--image_work_threads',
+                        default=8, type=int)
+
 
     args = parser.parse_args()
     preprocess(args)
