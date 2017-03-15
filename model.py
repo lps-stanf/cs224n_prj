@@ -49,28 +49,47 @@ def create_model(images_shape, dict_size, sentence_len):
     return combined_model
 
 
-def prepare_batch(sentences_dset, sent_to_img_dset, images_dset, batch_size=10):
+def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset, images_dset, batch_size=50):
     num_sentences = sentences_dset.shape[0]
     while 1:
         indices = np.random.randint(num_sentences, size=batch_size)
 
-        sentences_data = np.array([sentences_dset[ind] for ind in indices])
+        # todo: move generation of partial sentences to preprocessing?
+        # select partial sentence end point for each sentence
+        # sentence has 2 additional tokens: one at the beginning and one at the end
+        # so we can select partial sentence length be from 1 up to (1 + original sentence len)
+        # (in the last case we predict the <END> label)
+        sentences_len_data = [sentences_len_dset[ind] for ind in indices]
+        partial_lengths = [1 + np.random.randint(0, high=sent_len + 1) for sent_len in sentences_len_data]
+
+        sentences_data = []
+        truth_data = []
+        for index_num, ind in enumerate(indices):
+            new_elem = np.zeros(sentence_len)
+            cur_partial_len = partial_lengths[index_num]
+            new_elem[:cur_partial_len] = sentences_dset[ind][:cur_partial_len]
+            sentences_data.append(new_elem)
+
+            truth_data.append(sentences_dset[ind][cur_partial_len])
+
         images_data = np.array([images_dset[sent_to_img_dset[ind]] for ind in indices])
 
-        yield [images_data, sentences_data], sentences_data
+        yield [images_data, np.array(sentences_data)], np.array(truth_data)
 
 
 def train_model(h5_data_file, dict_size):
     images_dset = h5_data_file['images']
     sent_to_img_dset = h5_data_file['sentences_to_img']
     sentences_dset = h5_data_file['sentences']
+    sentences_len_dset = h5_data_file['sentences_len']
 
     sentence_len = len(sentences_dset[0])
     image_shape = images_dset.shape[1:]
 
     model = create_model(image_shape, dict_size, sentence_len)
-    model.fit_generator(generator=prepare_batch(sentences_dset, sent_to_img_dset, images_dset),
-                        samples_per_epoch=10, nb_epoch=1)
+    model.fit_generator(generator=prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset,
+                                                images_dset),
+                        samples_per_epoch=1000, nb_epoch=100)
 
 
 if __name__ == '__main__':
