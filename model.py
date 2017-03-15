@@ -44,9 +44,20 @@ def create_model(images_shape, dict_size, sentence_len):
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
 
-    combined_model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer='rmsprop')
 
     return combined_model
+
+
+def prepare_batch(sentences_dset, sent_to_img_dset, images_dset, batch_size=10):
+    num_sentences = sentences_dset.shape[0]
+    while 1:
+        indices = np.random.randint(num_sentences, size=batch_size)
+
+        sentences_data = np.array([sentences_dset[ind] for ind in indices])
+        images_data = np.array([images_dset[sent_to_img_dset[ind]] for ind in indices])
+
+        yield [images_data, sentences_data], sentences_data
 
 
 def train_model(h5_data_file, dict_size):
@@ -55,9 +66,11 @@ def train_model(h5_data_file, dict_size):
     sentences_dset = h5_data_file['sentences']
 
     sentence_len = len(sentences_dset[0])
-    image_shape =images_dset.shape[1:]
+    image_shape = images_dset.shape[1:]
 
     model = create_model(image_shape, dict_size, sentence_len)
+    model.fit_generator(generator=prepare_batch(sentences_dset, sent_to_img_dset, images_dset),
+                        samples_per_epoch=10, nb_epoch=1)
 
 
 if __name__ == '__main__':
