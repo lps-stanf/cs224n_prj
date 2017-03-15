@@ -145,6 +145,8 @@ def add_images_data(h5_file, filenames, num_processed_images, images_folder, ima
             x = np.squeeze(x)
 
             with lock:
+                if index % 1000 == 0:
+                    print('Writing image %d / %d' % (index, num_processed_images))
                 image_dset[index, :, :, :] = x
 
             q.task_done()
@@ -172,7 +174,7 @@ def preprocess(args):
 
     num_images = len(encoded_images_info)
     num_processed_images = num_images
-    if args.max_images >= 0:
+    if args.max_images > 0:
         num_processed_images = min(num_processed_images, args.max_images)
 
     # list of tuples (img_index, original_sentence_len, encoded sentence)
@@ -201,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir',
                         default='output')
     parser.add_argument('--max_images',
-                        default=10, type=int)
+                        default=0, type=int)
     parser.add_argument('--images_folder',
                         default="data/train2014")
     parser.add_argument('--image_work_threads',
