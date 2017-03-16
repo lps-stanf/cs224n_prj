@@ -86,7 +86,7 @@ def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_
         yield [images_data, np.array(sentences_data)], np.array(truth_data)
 
 
-def train_model(h5_data_file, dict_size):
+def train_model(h5_data_file, dict_size, weight_save_period):
     images_dset = h5_data_file['images']
     sent_to_img_dset = h5_data_file['sentences_to_img']
     sentences_dset = h5_data_file['sentences']
@@ -98,7 +98,7 @@ def train_model(h5_data_file, dict_size):
     model = create_model(image_shape, dict_size, sentence_len)
 
     tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
-    cp = MyModelCheckpoint("model_output", "weights", 5)
+    cp = MyModelCheckpoint("model_output", "weights", weight_save_period)
 
     model.fit_generator(generator=prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset,
                                                 images_dset),
@@ -114,6 +114,8 @@ if __name__ == '__main__':
                         default='output/id_to_word.json')
     parser.add_argument('--preprocessed_file',
                         default='output/preprocessed.h5')
+    parser.add_argument('--weight_save_epoch_period',
+                        default=1, type=int)
 
     args = parser.parse_args()
 
@@ -125,4 +127,4 @@ if __name__ == '__main__':
         dict_size = len(json.load(f))
 
     with h5py.File('output/preprocessed.h5', 'r') as h5_data_file:
-        train_model(h5_data_file, dict_size)
+        train_model(h5_data_file, dict_size, args.weight_save_epoch_period)
