@@ -1,6 +1,7 @@
 import argparse
 import json
 import random
+import os
 
 import h5py
 import keras
@@ -110,6 +111,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--seed',
                         default=42, type=int)
+    parser.add_argument('--cuda_devices',
+                        default=None)
     parser.add_argument('--id_to_word_file',
                         default='output/id_to_word.json')
     parser.add_argument('--preprocessed_file',
@@ -124,6 +127,9 @@ if __name__ == '__main__':
                         default=100, type=int)
 
     args = parser.parse_args()
+
+    if args.cuda_devices is not None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_devices
 
     random.seed(args.seed)
     np.random.seed(args.seed)
