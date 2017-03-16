@@ -86,7 +86,7 @@ def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_
         yield [images_data, np.array(sentences_data)], np.array(truth_data)
 
 
-def train_model(h5_data_file, dict_size, weight_save_period):
+def train_model(h5_data_file, dict_size, weight_save_period, samples_per_epoch, num_epoch, batch_size):
     images_dset = h5_data_file['images']
     sent_to_img_dset = h5_data_file['sentences_to_img']
     sentences_dset = h5_data_file['sentences']
@@ -101,8 +101,8 @@ def train_model(h5_data_file, dict_size, weight_save_period):
     cp = MyModelCheckpoint("model_output", "weights", weight_save_period)
 
     model.fit_generator(generator=prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset,
-                                                images_dset),
-                        samples_per_epoch=1000, nb_epoch=100, callbacks=[tb, cp])
+                                                images_dset, batch_size),
+                        samples_per_epoch=samples_per_epoch, nb_epoch=num_epoch, callbacks=[tb, cp])
 
 
 if __name__ == '__main__':
@@ -116,6 +116,12 @@ if __name__ == '__main__':
                         default='output/preprocessed.h5')
     parser.add_argument('--weight_save_epoch_period',
                         default=1, type=int)
+    parser.add_argument('--batch_size',
+                        default=50, type=int)
+    parser.add_argument('--samples_per_epoch',
+                        default=1000, type=int)
+    parser.add_argument('--num_epoch',
+                        default=100, type=int)
 
     args = parser.parse_args()
 
@@ -127,4 +133,5 @@ if __name__ == '__main__':
         dict_size = len(json.load(f))
 
     with h5py.File('output/preprocessed.h5', 'r') as h5_data_file:
-        train_model(h5_data_file, dict_size, args.weight_save_epoch_period)
+        train_model(h5_data_file, dict_size, args.weight_save_epoch_period, args.samples_per_epoch, args.num_epoch,
+                    args.batch_size)
