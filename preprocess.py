@@ -178,7 +178,8 @@ def preprocess(args):
         num_processed_images = min(num_processed_images, args.max_images)
 
     # list of tuples (img_index, original_sentence_len, encoded sentence)
-    sentences_data = [(img_ind, sent[0], sent[1]) for img_ind, img_data in enumerate(encoded_images_info) for sent in img_data[1]]
+    sentences_data = [(img_ind, sent[0], sent[1]) for img_ind, img_data in enumerate(encoded_images_info) for sent in
+                      img_data[1]]
 
     sentence_to_img = np.asarray([x[0] for x in sentences_data], dtype=np.int32)
     sentences_len = np.array([x[1] for x in sentences_data], dtype=np.int32)
@@ -188,7 +189,8 @@ def preprocess(args):
         h5_file.create_dataset('sentences_len', data=sentences_len)
         h5_file.create_dataset('sentences', data=sentences_array)
 
-        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, args.images_folder, args.image_work_threads)
+        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, args.images_folder,
+                        args.image_work_threads)
 
 
 if __name__ == '__main__':
@@ -208,7 +210,6 @@ if __name__ == '__main__':
                         default="data/train2014")
     parser.add_argument('--image_work_threads',
                         default=8, type=int)
-
 
     args = parser.parse_args()
     preprocess(args)
