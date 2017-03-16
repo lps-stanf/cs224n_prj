@@ -127,6 +127,15 @@ def encode_images_captions(data, word_to_id, max_sentence_len):
     return result
 
 
+def preprocess_image(filename, target_size):
+    img = image.load_img(filename, target_size=(224, 224))
+    x = image.img_to_array(img)
+    x = np.expand_dims(x, axis=0)
+    x = preprocess_input(x)
+    x = np.squeeze(x)
+    return x
+
+
 def add_images_data(h5_file, filenames, num_processed_images, images_folder, image_work_threads_count):
     filenames_slice = filenames[:num_processed_images]
 
@@ -147,16 +156,12 @@ def add_images_data(h5_file, filenames, num_processed_images, images_folder, ima
             except Empty:
                 break
 
-            img = image.load_img(filename, target_size=(224, 224))
-            x = image.img_to_array(img)
-            x = np.expand_dims(x, axis=0)
-            x = preprocess_input(x)
-            x = np.squeeze(x)
+            preprocessed_image = preprocess_image(filename, (224, 224))
 
             with lock:
                 if index % 1000 == 0:
                     print('Writing image %d / %d' % (index, num_processed_images))
-                image_dset[index, :, :, :] = x
+                image_dset[index, :, :, :] = preprocessed_image
 
             q.task_done()
 
