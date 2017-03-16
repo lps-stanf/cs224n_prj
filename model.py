@@ -1,13 +1,17 @@
 import argparse
 import json
 import random
+
 import h5py
+import keras
 import numpy as np
 import tensorflow as tf
 from keras.applications.vgg16 import VGG16
 from keras.engine import Input
 from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
 from keras.models import Sequential, Merge, Model
+
+from model_checkpoints import MyModelCheckpoint
 
 
 def create_image_model(images_shape, repeat_count):
@@ -92,9 +96,13 @@ def train_model(h5_data_file, dict_size):
     image_shape = images_dset.shape[1:]
 
     model = create_model(image_shape, dict_size, sentence_len)
+
+    tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
+    cp = MyModelCheckpoint("model_output", "weights", 5)
+
     model.fit_generator(generator=prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset,
                                                 images_dset),
-                        samples_per_epoch=1000, nb_epoch=100)
+                        samples_per_epoch=1000, nb_epoch=100, callbacks=[tb, cp])
 
 
 if __name__ == '__main__':
