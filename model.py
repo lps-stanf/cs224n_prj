@@ -1,251 +1,120 @@
-# coding: utf-8
-
-from __future__ import print_function
-
-import os
-
+import argparse
+import json
+import random
+import h5py
 import numpy as np
-from keras.applications.imagenet_utils import preprocess_input
-from keras.layers import Conv2D
-from keras.layers import Dense
-from keras.layers import Embedding, TimeDistributed, GRU, RepeatVector, Activation
-from keras.layers import GlobalMaxPooling2D
-from keras.layers import MaxPooling2D
-from keras.models import Sequential, Merge
-from keras.preprocessing import image
-from pycocotools.coco import COCO
-
-image_model = Sequential()
-# image_model.add(Input(shape=(224, 224, 3)))
-
-# Block 1
-image_model.add(Conv2D(64, 3, 3, activation='relu', border_mode='same', name='block1_conv1', input_shape=(224, 224, 3)))
-image_model.add(Conv2D(64, 3, 3, activation='relu', border_mode='same', name='block1_conv2'))
-image_model.add(MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool'))
-
-# Block 2
-image_model.add(Conv2D(128, 3, 3, activation='relu', border_mode='same', name='block2_conv1'))
-image_model.add(Conv2D(128, 3, 3, activation='relu', border_mode='same', name='block2_conv2'))
-image_model.add(MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool'))
-
-# Block 3
-image_model.add(Conv2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv1'))
-image_model.add(Conv2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv2'))
-image_model.add(Conv2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv3'))
-image_model.add(MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool'))
-
-# Block 4
-image_model.add(Conv2D(512, 3, 3, activation='relu', border_mode='same', name='block4_conv1'))
-image_model.add(Conv2D(512, 3, 3, activation='relu', border_mode='same', name='block4_conv2'))
-image_model.add(Conv2D(512, 3, 3, activation='relu', border_mode='same', name='block4_conv3'))
-image_model.add(MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool'))
-
-# Block 5
-image_model.add(Conv2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv1'))
-image_model.add(Conv2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv2'))
-image_model.add(Conv2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv3'))
-image_model.add(MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool'))
-
-image_model.add(GlobalMaxPooling2D())
-
-image_model.load_weights('vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5')
-
-example = image.load_img('/home/bkovalenko/experiments/coco/images/train/train2014/COCO_train2014_000000124240.jpg',
-                         target_size=(224, 224))
-example = image.img_to_array(example)
-example = example.reshape((1, 224, 224, 3)).astype(np.float64)
-print(example.shape)
-
-example = preprocess_input(example, dim_ordering='th')
-print(example.shape)
-
-features = image_model.predict(example)
-print(features.shape)
+import tensorflow as tf
+from keras.applications.vgg16 import VGG16
+from keras.engine import Input
+from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
+from keras.models import Sequential, Merge, Model
 
 
-# -------
+def create_image_model(images_shape, repeat_count):
+    inputs = Input(shape=images_shape)
+    vgg_model = VGG16(weights='imagenet', include_top=False, input_tensor=inputs)
 
-def get_images_paths(folder=None, exten='jpg'):
-    all_images = []
-    for filename in os.listdir(folder):
-        if filename.endswith("." + exten):
-            all_images.append(os.path.join(folder, filename))
-            continue
-        else:
-            continue
-
-    return np.array(all_images)
+    x = vgg_model(inputs)
+    x = GlobalMaxPooling2D()(x)
+    x = RepeatVector(repeat_count)(x)
+    return Model(inputs, x, 'image_model')
 
 
-all_images = get_images_paths(folder='/home/bkovalenko/experiments/coco/images/train/train2014/', exten='jpg')
-print(len(all_images))
-
-all_image_ids = [int(x.split('_')[2].rstrip('.jpg').lstrip('0')) for x in all_images]
-print(len(all_image_ids))
-
-# -------
-
-
-text_data = COCO(annotation_file='/home/bkovalenko/experiments/coco/annotations/captions_train2014.json')
-
-all_captions = text_data.loadAnns(text_data.getAnnIds(imgIds=all_image_ids))
-
-sentences = [x[u'caption'] for x in all_captions]
-
-words2id_count = {}
-words = 0
-
-for senten in sentences:
-    for word in senten.split(' '):
-        word = ''.join(x for x in word.lower() if x.isalpha())
-        if word in words2id_count:
-            words2id_count[word] = (words2id_count[word][0], words2id_count[word][1] + 1)
-        else:
-            words2id_count[word] = (words, 1)
-            words += 1
-
-wid = 100
-print(words2id_count.keys()[wid])
-print(words2id_count.values()[wid])
-
-words2id_count[u'riding']
-
-# print(len(words2id_count))
-
-# for x in words2id_count.keys():
-#     if words2id_count[x][1] < 0 or words2id_count[x][1] > 100:
-#         del(words2id_count[x])
-
-# print(len(words2id_count))
+def create_sentence_model(dict_size, sentence_len):
+    sentence_model = Sequential()
+    # + 1 to respect masking
+    sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
+    sentence_model.add(GRU(output_dim=128, return_sequences=True))
+    sentence_model.add(TimeDistributed(Dense(128)))
+    return sentence_model
 
 
-words2id_count['UNKNWN'] = (len(words2id_count) + 1, 0)
+def create_model(images_shape, dict_size, sentence_len):
+    # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
+    image_model = create_image_model(images_shape, sentence_len)
 
-# -------
+    # outputs (None, sentence_len, 128)
+    sentence_model = create_sentence_model(dict_size, sentence_len)
 
-# next, let's define a RNN model that encodes sequences of words
-# into sequences of 128-dimensional word vectors.
-language_model = Sequential()
-language_model.add(Embedding(len(words2id_count), 512, input_length=16))
-language_model.add(GRU(output_dim=128, return_sequences=True))
-language_model.add(TimeDistributed(Dense(128)))
+    combined_model = Sequential()
+    combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-# let's repeat the image vector to turn it into a sequence.
-image_model.add(RepeatVector(16))
+    combined_model.add(GRU(256, return_sequences=False))
 
-# the output of both models will be tensors of shape (samples, max_caption_len, 128).
-# let's concatenate these 2 vector sequences.
-model = Sequential()
-model.add(Merge([image_model, language_model], mode='concat', concat_axis=-1))
+    combined_model.add(Dense(dict_size))
+    combined_model.add(Activation('softmax'))
 
-# let's encode this vector sequence into a single vector
-model.add(GRU(256, return_sequences=False))
+    # input words are 1-indexed and 0 index is used for masking!
+    # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-# which will be used to compute a probability
-# distribution over what the next word in the caption should be!
-model.add(Dense(len(words2id_count)))
-model.add(Activation('softmax'))
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer='rmsprop')
 
-model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
-
-# -----
+    return combined_model
 
 
-# example = example.reshape(224, 224, 3)
-# images = np.array([example, example])
-# print(images.shape)
-
-# partial_captions = np.array([[1,5,3,2, marker,marker,marker,marker,marker,marker,marker,marker,marker,marker,marker,marker],
-#                              [4,5,6,2, marker,marker,marker,marker,marker,marker,marker,marker,marker,marker,marker,marker]])
-# print(partial_captions.shape)
-
-
-
-# next_words = np.zeros((2, 6869))
-# next_words[0, 50] = 1
-# next_words[0, 2] = 1
-
-
-
-# "images" is a numpy float array of shape (nb_samples, nb_channels=3, width, height).
-# "captions" is a numpy integer array of shape (nb_samples, max_caption_len)
-# containing word index sequences representing partial captions.
-# "next_words" is a numpy float array of shape (nb_samples, vocab_size)
-# containing a categorical encoding (0s and 1s) of the next word in the corresponding
-# partial caption.
-# model.fit([images, partial_captions], next_words, batch_size=1, nb_epoch=1)
-
-
-# -----
-
-# COCO_train2014_000000124240.jpg
-
-
-print(len(words2id_count))
-
-
-def prepare_batch(images_path=None, image_batch_size=4):
+def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset, images_dset, batch_size=50):
+    num_sentences = sentences_dset.shape[0]
     while 1:
-        # choose images
-        indices = np.random.randint(0, images_path.shape[0], image_batch_size)
-        sample = images_path[indices]
+        indices = np.random.randint(num_sentences, size=batch_size)
 
-        # image ids
-        image_ids = [int(x.split('_')[2].rstrip('.jpg').lstrip('0')) for x in sample]
+        # todo: move generation of partial sentences to preprocessing?
+        # select partial sentence end point for each sentence
+        # sentence has 2 additional tokens: one at the beginning and one at the end
+        # so we can select partial sentence length be from 1 up to (1 + original sentence len)
+        # (in the last case we predict the <END> label)
+        sentences_len_data = [sentences_len_dset[ind] for ind in indices]
+        partial_lengths = [1 + np.random.randint(0, high=sent_len + 1) for sent_len in sentences_len_data]
 
-        # load images
-        loaded_images = [image.img_to_array(image.load_img(x, target_size=(224, 224))) for x in sample]
+        sentences_data = []
+        truth_data = []
+        for index_num, ind in enumerate(indices):
+            new_elem = np.zeros(sentence_len)
+            cur_partial_len = partial_lengths[index_num]
+            new_elem[:cur_partial_len] = sentences_dset[ind][:cur_partial_len]
+            sentences_data.append(new_elem)
 
-        # load caps and normalize them
-        caps = [(x[u'caption'], x[u'image_id']) for x in text_data.loadAnns(ids=text_data.getAnnIds(imgIds=image_ids))]
-        normalized_caps = []
-        for x in zip(*caps)[0]:
-            tmp_cap = []
-            for w in x.split(' '):
-                w = ''.join(x for x in w.lower() if x.isalpha()).strip(' ')
-                if len(w) < 2:
-                    continue
-                try:
-                    tmp_cap.append(words2id_count[w][0])
-                except:
-                    tmp_cap.append(words2id_count['UNKNWN'][0])
+            # input words are 1-indexed and 0 index is used for masking!
+            # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+            truth_data.append(sentences_dset[ind][cur_partial_len] - 1)
 
-            normalized_caps.append(tmp_cap)
+        images_data = np.array([images_dset[sent_to_img_dset[ind]] for ind in indices])
 
-        # repeat image vectors
-        repeated_imvec = []
-        for i, img_id in enumerate(image_ids):
-            im_count = zip(*caps)[1].count(img_id)
-            repeated_imvec += [loaded_images[i]] * im_count
-
-        # prepare training sequences and targets
-        training_seq = []
-        target_words = []
-        for sent in normalized_caps:
-            sent = sent[:17]
-            indx = np.random.randint(low=1, high=len(sent), size=1)[0]
-
-            targ = np.zeros(len(words2id_count))
-            targ[sent[indx:]] = 1
-
-            training_seq.append(sent[:indx] + [words2id_count['UNKNWN'][0]] * (16 - len(sent[:indx])))
-            target_words.append(targ)
-
-        if len(repeated_imvec) != len(target_words) or len(repeated_imvec) != len(training_seq):
-            continue
-
-        yield [np.array(repeated_imvec), np.array(training_seq).reshape((-1, 16))], np.array(target_words)
+        yield [images_data, np.array(sentences_data)], np.array(truth_data)
 
 
-# break
+def train_model(h5_data_file, dict_size):
+    images_dset = h5_data_file['images']
+    sent_to_img_dset = h5_data_file['sentences_to_img']
+    sentences_dset = h5_data_file['sentences']
+    sentences_len_dset = h5_data_file['sentences_len']
+
+    sentence_len = len(sentences_dset[0])
+    image_shape = images_dset.shape[1:]
+
+    model = create_model(image_shape, dict_size, sentence_len)
+    model.fit_generator(generator=prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset,
+                                                images_dset),
+                        samples_per_epoch=1000, nb_epoch=100)
 
 
-# xx = prepare_batch(images_path=all_images)
-# print(xx[0][0].shape, xx[0][1].shape, xx[1].shape)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
 
+    parser.add_argument('--seed',
+                        default=42, type=int)
+    parser.add_argument('--id_to_word_file',
+                        default='output/id_to_word.json')
+    parser.add_argument('--preprocessed_file',
+                        default='output/preprocessed.h5')
 
-# -----
+    args = parser.parse_args()
 
-data_stream = prepare_batch(images_path=all_images)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    tf.set_random_seed(args.seed)
 
-model.fit_generator(generator=data_stream, samples_per_epoch=10000, nb_epoch=10)
+    with open(args.id_to_word_file, 'r') as f:
+        dict_size = len(json.load(f))
+
+    with h5py.File('output/preprocessed.h5', 'r') as h5_data_file:
+        train_model(h5_data_file, dict_size)
