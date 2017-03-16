@@ -106,15 +106,24 @@ def encode_sentence(sent, word_to_id, max_sentence_len):
 
     # adding zeroes at the end for masking in the model
     result = [word_to_id[TokenBegin]] + result + [word_to_id[TokenEnd]] + [0] * delta
-    return len(sent), result
+    return len(sent) + 2, result
 
 
 def encode_images_captions(data, word_to_id, max_sentence_len):
     result = []
     for _, img_info in data.items():
-        encoded_sentences = [encode_sentence(sent, word_to_id, max_sentence_len) for sent in
-                             img_info['captions']]
-        result.append((img_info['file'], encoded_sentences))
+        partial_sentences = []
+        for cur_sentence in img_info['captions']:
+            encoded_len, encoded_sent = encode_sentence(cur_sentence, word_to_id, max_sentence_len)
+            # generating all partial sentences and corresponding next words that we can use for prediction
+            # the last sentence is the [<Begin>]
+            while encoded_len > 1:
+                encoded_len -= 1
+                true_answer = encoded_sent[encoded_len]
+                encoded_sent[encoded_len] = 0
+                partial_sentences.append((list(encoded_sent), true_answer))
+
+        result.append((img_info['file'], partial_sentences))
     return result
 
 
@@ -177,18 +186,19 @@ def preprocess(args):
     if args.max_images > 0:
         num_processed_images = min(num_processed_images, args.max_images)
 
-    # list of tuples (img_index, original_sentence_len, encoded sentence)
+    # list of tuples (img_index, encoded partial sentence, next word)
     sentences_data = [(img_ind, sent[0], sent[1]) for img_ind, img_data in enumerate(encoded_images_info) for sent in
                       img_data[1]]
 
     sentence_to_img = np.asarray([x[0] for x in sentences_data], dtype=np.int32)
-    sentences_len = np.array([x[1] for x in sentences_data], dtype=np.int32)
-    sentences_array = np.array([x[2] for x in sentences_data], dtype=np.int32)
-    with h5py.File(os.path.join(args.output_dir, 'preprocessed.h5'), 'w') as h5_file:
+    sentences_array = np.array([x[1] for x in sentences_data], dtype=np.int32)
+    sentences_next = np.array([x[2] for x in sentences_data], dtype=np.int32)
+    with h5py.File(os.path.join(args.output_dir, 'preprocessed_text.h5'), 'w') as h5_file:
         h5_file.create_dataset('sentences_to_img', data=sentence_to_img)
-        h5_file.create_dataset('sentences_len', data=sentences_len)
+        h5_file.create_dataset('sentences_next', data=sentences_next)
         h5_file.create_dataset('sentences', data=sentences_array)
 
+    with h5py.File(os.path.join(args.output_dir, 'preprocessed_images.h5'), 'w') as h5_file:
         add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, args.images_folder,
                         args.image_work_threads)
 

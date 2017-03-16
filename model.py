@@ -57,41 +57,27 @@ def create_model(images_shape, dict_size, sentence_len):
     return combined_model
 
 
-def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset, images_dset, batch_size=50):
+def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size=50):
     num_sentences = sentences_dset.shape[0]
+    assert (num_sentences == sentences_next_dset.shape[0])
+
     while 1:
         indices = np.random.randint(num_sentences, size=batch_size)
-
-        # todo: move generation of partial sentences to preprocessing?
-        # select partial sentence end point for each sentence
-        # sentence has 2 additional tokens: one at the beginning and one at the end
-        # so we can select partial sentence length be from 1 up to (1 + original sentence len)
-        # (in the last case we predict the <END> label)
-        sentences_len_data = [sentences_len_dset[ind] for ind in indices]
-        partial_lengths = [1 + np.random.randint(0, high=sent_len + 1) for sent_len in sentences_len_data]
-
-        sentences_data = []
-        truth_data = []
-        for index_num, ind in enumerate(indices):
-            new_elem = np.zeros(sentence_len)
-            cur_partial_len = partial_lengths[index_num]
-            new_elem[:cur_partial_len] = sentences_dset[ind][:cur_partial_len]
-            sentences_data.append(new_elem)
-
-            # input words are 1-indexed and 0 index is used for masking!
-            # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
-            truth_data.append(sentences_dset[ind][cur_partial_len] - 1)
-
+        sentences_data = np.array([sentences_dset[ind] for ind in indices])
         images_data = np.array([images_dset[sent_to_img_dset[ind]] for ind in indices])
 
-        yield [images_data, np.array(sentences_data)], np.array(truth_data)
+        # input words are 1-indexed and 0 index is used for masking!
+        # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+        truth_data = np.array([sentences_next_dset[ind] - 1 for ind in indices])
+
+        yield [images_data, sentences_data], truth_data
 
 
-def train_model(h5_data_file, dict_size, weight_save_period, samples_per_epoch, num_epoch, batch_size):
-    images_dset = h5_data_file['images']
-    sent_to_img_dset = h5_data_file['sentences_to_img']
-    sentences_dset = h5_data_file['sentences']
-    sentences_len_dset = h5_data_file['sentences_len']
+def train_model(h5_images_file, h5_text_file, dict_size, weight_save_period, samples_per_epoch, num_epoch, batch_size):
+    images_dset = h5_images_file['images']
+    sent_to_img_dset = h5_text_file['sentences_to_img']
+    sentences_dset = h5_text_file['sentences']
+    sentences_next_dset = h5_text_file['sentences_next']
 
     sentence_len = len(sentences_dset[0])
     image_shape = images_dset.shape[1:]
@@ -101,7 +87,7 @@ def train_model(h5_data_file, dict_size, weight_save_period, samples_per_epoch, 
     tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
     cp = MyModelCheckpoint("model_output", "weights", weight_save_period)
 
-    model.fit_generator(generator=prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset,
+    model.fit_generator(generator=prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset,
                                                 images_dset, batch_size),
                         samples_per_epoch=samples_per_epoch, nb_epoch=num_epoch, callbacks=[tb, cp])
 
@@ -115,8 +101,10 @@ if __name__ == '__main__':
                         default=None)
     parser.add_argument('--id_to_word_file',
                         default='output/id_to_word.json')
-    parser.add_argument('--preprocessed_file',
-                        default='output/preprocessed.h5')
+    parser.add_argument('--preprocessed_images_file',
+                        default='output/preprocessed_images.h5')
+    parser.add_argument('--preprocessed_text_file',
+                        default='output/preprocessed_text.h5')
     parser.add_argument('--weight_save_epoch_period',
                         default=1, type=int)
     parser.add_argument('--batch_size',
@@ -138,6 +126,7 @@ if __name__ == '__main__':
     with open(args.id_to_word_file, 'r') as f:
         dict_size = len(json.load(f))
 
-    with h5py.File('output/preprocessed.h5', 'r') as h5_data_file:
-        train_model(h5_data_file, dict_size, args.weight_save_epoch_period, args.samples_per_epoch, args.num_epoch,
-                    args.batch_size)
+    with h5py.File(args.preprocessed_images_file, 'r') as h5_images_file, \
+            h5py.File(args.preprocessed_text_file, 'r') as h5_text_file:
+        train_model(h5_images_file, h5_text_file, dict_size, args.weight_save_epoch_period, args.samples_per_epoch,
+                    args.num_epoch, args.batch_size)
