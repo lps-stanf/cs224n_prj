@@ -44,6 +44,9 @@ def create_model(images_shape, dict_size, sentence_len):
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
 
+    # input words are 1-indexed and 0 index is used for masking!
+    # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer='rmsprop')
 
     return combined_model
@@ -70,7 +73,9 @@ def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_
             new_elem[:cur_partial_len] = sentences_dset[ind][:cur_partial_len]
             sentences_data.append(new_elem)
 
-            truth_data.append(sentences_dset[ind][cur_partial_len])
+            # input words are 1-indexed and 0 index is used for masking!
+            # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+            truth_data.append(sentences_dset[ind][cur_partial_len] - 1)
 
         images_data = np.array([images_dset[sent_to_img_dset[ind]] for ind in indices])
 
