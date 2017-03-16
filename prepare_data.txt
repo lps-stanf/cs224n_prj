@@ -1,0 +1,13 @@
+place "train2014" folder with the images from COCO database into "data" folder
+
+place captions "captions_train2014.json" file into "data" dolder
+
+run "python3 preprocess.py" this will create required files for the model in "output" folder
+
+run "python3 model.py" to start model learning
+
+
+
+
+
+
