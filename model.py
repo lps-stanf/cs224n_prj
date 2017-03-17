@@ -16,23 +16,20 @@ from keras.applications.resnet50 import ResNet50
 from keras.engine import Input
 from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
 from keras.models import Sequential, Merge, Model
-
 from keras import optimizers
 
 from model_checkpoints import MyModelCheckpoint
 
 adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-nadam = keras.optimizers.Nadam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
-
+nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
 
 def create_image_model(images_shape, repeat_count):
     inputs = Input(shape=images_shape)
-    #    vgg_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
 
-    res50_model = ResNet50(weights='imagenet', include_top=False, input_tensor=inputs)
+    #    visual_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
+    visual_model = ResNet50(weights='imagenet', include_top=False, input_tensor=inputs)
 
-    #    x = vgg_model(inputs)
-    x = res50_model(inputs)
+    x = visual_model(inputs)
     x = GlobalMaxPooling2D()(x)
     x = RepeatVector(repeat_count)(x)
     return Model(inputs, x, 'image_model')
@@ -61,6 +58,9 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
+
+    # optimizers
+    adam = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
