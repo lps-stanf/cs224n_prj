@@ -12,11 +12,11 @@ from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
 from keras.applications.resnet50 import ResNet50
 from keras.applications.inception_v3 import InceptionV3
+from keras.applications.resnet50 import ResNet50
 
 from keras.engine import Input
 from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
 from keras.models import Sequential, Merge, Model
-
 from keras import optimizers
 
 from model_checkpoints import MyModelCheckpoint
@@ -26,9 +26,11 @@ nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-0
 
 def create_image_model(images_shape, repeat_count):
     inputs = Input(shape=images_shape)
-    image_model = ResNet50(weights='imagenet', include_top=False, input_tensor=inputs)
 
-    x = image_model(inputs)
+    #    visual_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
+    visual_model = ResNet50(weights='imagenet', include_top=False, input_tensor=inputs)
+
+    x = visual_model(inputs)
     x = GlobalMaxPooling2D()(x)
     x = RepeatVector(repeat_count)(x)
     return Model(inputs, x, 'image_model')
@@ -43,7 +45,7 @@ def create_sentence_model(dict_size, sentence_len):
     return sentence_model
 
 
-def create_model(images_shape, dict_size, sentence_len):
+def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -66,7 +68,7 @@ def create_model(images_shape, dict_size, sentence_len):
     return combined_model
 
 
-def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size=50):
+def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size):
     num_sentences = sentences_dset.shape[0]
     assert (num_sentences == sentences_next_dset.shape[0])
 
@@ -109,6 +111,9 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     image_shape = images_train.shape[1:]
 
     model = create_model(image_shape, dict_size_train, sentence_len)
+    if start_weights_path is not None:
+        model.load_weights(start_weights_path)
+        print('Using start weights: "{}"'.format(start_weights_path))
 
     tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
     cp = MyModelCheckpoint("model_output", "weights", weight_save_period)
@@ -149,6 +154,8 @@ if __name__ == '__main__':
                         default=1000, type=int)
     parser.add_argument('--num_epoch',
                         default=100, type=int)
+    parser.add_argument('--start_weights_path', help='Optional path to start weights for the model',
+                        default=None)
 
     args = parser.parse_args()
 
