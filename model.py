@@ -103,6 +103,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
         val_stream = prepare_batch(sentences_val, sentences_next_val, sent_to_img_val, images_val, batch_size)
     else:
         val_stream = None
+        val_samples = None
 
     sentence_len = len(sentences_train[0])
     image_shape = images_train.shape[1:]
