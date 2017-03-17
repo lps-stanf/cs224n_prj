@@ -2,7 +2,7 @@ import argparse
 import json
 import random
 import os
-
+import datetime
 import h5py
 import keras
 import numpy as np
@@ -17,7 +17,6 @@ from keras.applications.resnet50 import ResNet50
 from keras.engine import Input
 from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
 from keras.models import Sequential, Merge, Model
-from keras import optimizers
 
 from model_checkpoints import MyModelCheckpoint
 
@@ -87,7 +86,7 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
                 weight_save_period=None, samples_per_epoch=None, num_epoch=None, batch_size=None,
-                h5_images_val=None, h5_text_val=None, val_samples=None, start_weights_path=None):
+                h5_images_val=None, h5_text_val=None, val_samples=None, start_weights_path=None, model_id=None):
 
     # Train
     images_train = h5_images_train['images']
@@ -117,7 +116,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
         print('Using start weights: "{}"'.format(start_weights_path))
 
     tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
-    cp = MyModelCheckpoint("model_output", "weights", weight_save_period)
+    cp = MyModelCheckpoint("model_output", "weights", weight_save_period, model_id=model_id)
 
     # Initialize train generator
     train_stream = prepare_batch(sentences_train, sentences_next_train, sent_to_img_train, images_train, batch_size)
@@ -157,6 +156,8 @@ if __name__ == '__main__':
                         default=100, type=int)
     parser.add_argument('--start_weights_path', help='Optional path to start weights for the model',
                         default=None)
+    parser.add_argument('--model_id',
+                        default=datetime.datetime.now().isoformat(), type=str)
 
     args = parser.parse_args()
 
@@ -194,7 +195,8 @@ if __name__ == '__main__':
                     samples_per_epoch=args.samples_per_epoch,
                     num_epoch=args.num_epoch,
                     batch_size=args.batch_size,
-                    start_weights_path=args.start_weights_path)
+                    start_weights_path=args.start_weights_path,
+                    model_id=args.model_id)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()
