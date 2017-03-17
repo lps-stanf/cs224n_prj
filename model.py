@@ -135,9 +135,9 @@ if __name__ == '__main__':
     parser.add_argument('--preprocessed_train',
                         default='output_train')
     parser.add_argument('--preprocessed_test',
-                        default='None')
+                        default=None)
     parser.add_argument('--preprocessed_val',
-                        default='None')
+                        default=None)
 
     parser.add_argument('--weight_save_epoch_period',
                         default=1, type=int)
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     preprocessed_text_train = os.path.join(args.preprocessed_train, 'preprocessed_text.h5')
 
     # Val data
-    if args.preprocessed_val != 'None':
+    if args.preprocessed_val is not None:
         preprocessed_images_val = os.path.join(args.preprocessed_val, 'preprocessed_images.h5')
         preprocessed_text_val = os.path.join(args.preprocessed_val, 'preprocessed_text.h5')
 
