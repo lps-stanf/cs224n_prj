@@ -174,9 +174,14 @@ def add_images_data(h5_file, filenames, num_processed_images, images_folder, ima
 
 def preprocess(args):
     filtered_images_info = get_filtered_images_info(args.captionsFile, args.max_sentence_length)
-    vocab = build_vocab(filtered_images_info, args.min_token_instances)
 
-    word_to_id, id_to_word = build_vocab_to_id(vocab)
+    if args.train_data is not None:
+        word_to_id = json.load(open(os.path.join(args.train_data, 'word_to_id.json')))
+        id_to_word = json.load(open(os.path.join(args.train_data, 'id_to_word.json')))
+    else:
+        vocab = build_vocab(filtered_images_info, args.min_token_instances)
+        word_to_id, id_to_word = build_vocab_to_id(vocab)
+
     with open(os.path.join(args.output_dir, 'word_to_id.json'), 'w') as f:
         json.dump(word_to_id, f)
     with open(os.path.join(args.output_dir, 'id_to_word.json'), 'w') as f:
@@ -225,6 +230,8 @@ if __name__ == '__main__':
                         default="data/train2014")
     parser.add_argument('--image_work_threads',
                         default=8, type=int)
+    parser.add_argument('--train_data',
+                        default=None)
 
     args = parser.parse_args()
     preprocess(args)
