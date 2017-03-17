@@ -7,6 +7,7 @@ import h5py
 from model import create_model
 from preprocess import preprocess_image
 import numpy as np
+from keras.preprocessing import image
 
 
 def create_image_caption(model, image_filename, resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
@@ -36,8 +37,9 @@ def create_image_caption(model, image_filename, resolution, sentence_max_len, To
         result_sentence += ' '
         if cur_code == TokenEndIndex:
             break
+    result_sentence = result_sentence.strip()
 
-    print('{0}: "{1}"', image_filename, result_sentence)
+    print('"{0}": "{1}"'.format(image_filename, result_sentence))
 
 
 def find_token_index(id_to_word_dict, token):
@@ -46,6 +48,18 @@ def find_token_index(id_to_word_dict, token):
             return k
     else:
         raise "Didn't find required token"
+
+
+def create_caption_for_path(source_path, model, model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
+                            id_to_word_dict):
+    if os.path.isfile(source_path):
+        create_image_caption(model, source_path, model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
+                             id_to_word_dict)
+    else:
+        images_list = image.list_pictures(source_path)
+        for cur_image_path in images_list:
+            create_image_caption(model, cur_image_path, model_resolution, sentence_max_len, TokenBeginIndex,
+                                 TokenEndIndex, id_to_word_dict)
 
 
 def perform_testing(preprocessed_images_file, preprocessed_text_file, weights_filename, test_source, id_to_word_dict):
@@ -65,21 +79,21 @@ def perform_testing(preprocessed_images_file, preprocessed_text_file, weights_fi
     model = create_model(image_shape, dict_size, sentence_max_len)
     model.load_weights(weights_filename)
 
-    create_image_caption(model, 'test.jpg', image_shape[:2], sentence_max_len, TokenBeginIndex, TokenEndIndex,
+    create_caption_for_path(test_source, model, image_shape[:2], sentence_max_len, TokenBeginIndex, TokenEndIndex,
                          id_to_word_dict)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--preprocessed_text_file',
-                        default='output/preprocessed_text.h5')
+                        default='output_train/preprocessed_text.h5')
     parser.add_argument('--preprocessed_images_file',
-                        default='output/preprocessed_images.h5')
+                        default='output_train/preprocessed_images.h5')
     parser.add_argument('--weights_filename', required=True)
     parser.add_argument('--test_source',
                         default='test_images')
     parser.add_argument('--id_to_word_file',
-                        default='output/id_to_word.json')
+                        default='output_train/id_to_word.json')
     parser.add_argument('--cuda_devices',
                         default=None)
 
