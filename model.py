@@ -24,13 +24,14 @@ from model_checkpoints import MyModelCheckpoint
 adam = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 nadam = keras.optimizers.Nadam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
 
+
 def create_image_model(images_shape, repeat_count):
     inputs = Input(shape=images_shape)
-#    vgg_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
+    #    vgg_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
 
-    res50_model = ResNet50(weights='imagenet', include_top = False, input_tensor = inputs)
+    res50_model = ResNet50(weights='imagenet', include_top=False, input_tensor=inputs)
 
-#    x = vgg_model(inputs)
+    #    x = vgg_model(inputs)
     x = res50_model(inputs)
     x = GlobalMaxPooling2D()(x)
     x = RepeatVector(repeat_count)(x)
@@ -64,7 +65,7 @@ def create_model(images_shape, dict_size, sentence_len):
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-    combined_model.compile(loss = 'sparse_categorical_crossentropy', optimizer = nadam)
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=nadam)
 
     return combined_model
 
@@ -85,7 +86,8 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
         yield [images_data, sentences_data], truth_data
 
 
-def train_model(h5_images_file, h5_text_file, dict_size, weight_save_period, samples_per_epoch, num_epoch, batch_size):
+def train_model(h5_images_file, h5_text_file, dict_size, weight_save_period, samples_per_epoch, num_epoch, batch_size,
+                start_weights_path):
     images_dset = h5_images_file['images']
     sent_to_img_dset = h5_text_file['sentences_to_img']
     sentences_dset = h5_text_file['sentences']
@@ -95,6 +97,9 @@ def train_model(h5_images_file, h5_text_file, dict_size, weight_save_period, sam
     image_shape = images_dset.shape[1:]
 
     model = create_model(image_shape, dict_size, sentence_len)
+    if start_weights_path is not None:
+        model.load_weights(start_weights_path)
+        print('Using start weights: "{}"'.format(start_weights_path))
 
     tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
     cp = MyModelCheckpoint("model_output", "weights", weight_save_period)
@@ -125,6 +130,8 @@ if __name__ == '__main__':
                         default=1000, type=int)
     parser.add_argument('--num_epoch',
                         default=100, type=int)
+    parser.add_argument('--start_weights_path', help='Optional path to start weights for the model',
+                        default=None)
 
     args = parser.parse_args()
 
@@ -141,4 +148,4 @@ if __name__ == '__main__':
     with h5py.File(args.preprocessed_images_file, 'r') as h5_images_file, \
             h5py.File(args.preprocessed_text_file, 'r') as h5_text_file:
         train_model(h5_images_file, h5_text_file, dict_size, args.weight_save_epoch_period, args.samples_per_epoch,
-                    args.num_epoch, args.batch_size)
+                    args.num_epoch, args.batch_size, args.start_weights_path)
