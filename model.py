@@ -59,9 +59,6 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
 
-    # optimizers
-    adam = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
