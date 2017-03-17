@@ -22,7 +22,7 @@ from keras import optimizers
 from model_checkpoints import MyModelCheckpoint
 
 adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
+nadam = keras.optimizers.Nadam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
 
 
 def create_image_model(images_shape, repeat_count):
@@ -47,7 +47,7 @@ def create_sentence_model(dict_size, sentence_len):
     return sentence_model
 
 
-def create_model(images_shape, dict_size, sentence_len):
+def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -57,7 +57,6 @@ def create_model(images_shape, dict_size, sentence_len):
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-    combined_model.add(GRU(256, return_sequences=True))
     combined_model.add(GRU(256, return_sequences=False))
 
     combined_model.add(Dense(dict_size))
@@ -66,12 +65,12 @@ def create_model(images_shape, dict_size, sentence_len):
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=nadam)
+    combined_model.compile(loss = 'sparse_categorical_crossentropy', optimizer = optimizer)
 
     return combined_model
 
 
-def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size=50):
+def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size):
     num_sentences = sentences_dset.shape[0]
     assert (num_sentences == sentences_next_dset.shape[0])
 
