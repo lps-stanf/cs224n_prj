@@ -173,7 +173,7 @@ if __name__ == '__main__':
         preprocessed_text_val = os.path.join(args.preprocessed_val, 'preprocessed_text.h5')
 
         h5_images_val = h5py.File(preprocessed_images_val, 'r')
-        h5_text_val = h5py.File(preprocessed_images_val, 'r')
+        h5_text_val = h5py.File(preprocessed_text_val, 'r')
     else:
         h5_images_val, h5_text_val = None, None
 
