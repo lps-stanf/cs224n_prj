@@ -22,7 +22,7 @@ from keras import optimizers
 from model_checkpoints import MyModelCheckpoint
 
 adam = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-nadam = keras.optimizers.Nadam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
+nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
 
 def create_image_model(images_shape, repeat_count):
     inputs = Input(shape=images_shape)
@@ -56,6 +56,7 @@ def create_model(images_shape, dict_size, sentence_len):
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
+    combined_model.add(GRU(256, return_sequences=True))
     combined_model.add(GRU(256, return_sequences=False))
 
     combined_model.add(Dense(dict_size))
