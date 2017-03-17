@@ -27,12 +27,11 @@ nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-0
 
 def create_image_model(images_shape, repeat_count):
     inputs = Input(shape=images_shape)
-    #    vgg_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
 
-    res50_model = ResNet50(weights='imagenet', include_top=False, input_tensor=inputs)
+    #    visual_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
+    visual_model = ResNet50(weights='imagenet', include_top=False, input_tensor=inputs)
 
-    #    x = vgg_model(inputs)
-    x = res50_model(inputs)
+    x = visual_model(inputs)
     x = GlobalMaxPooling2D()(x)
     x = RepeatVector(repeat_count)(x)
     return Model(inputs, x, 'image_model')
