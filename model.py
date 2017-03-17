@@ -86,7 +86,7 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
                 weight_save_period=None, samples_per_epoch=None, num_epoch=None, batch_size=None,
-                h5_images_val=None, h5_text_val=None, val_samples=None):
+                h5_images_val=None, h5_text_val=None, val_samples=None, start_weights_path=None):
 
     # Train
     images_train = h5_images_train['images']
@@ -192,7 +192,8 @@ if __name__ == '__main__':
                     weight_save_period=args.weight_save_epoch_period,
                     samples_per_epoch=args.samples_per_epoch,
                     num_epoch=args.num_epoch,
-                    batch_size=args.batch_size)
+                    batch_size=args.batch_size,
+                    start_weights_path=args.start_weights_path)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()
