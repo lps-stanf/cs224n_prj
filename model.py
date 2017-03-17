@@ -6,13 +6,21 @@ import h5py
 import keras
 import numpy as np
 import tensorflow as tf
+
 from keras.applications.vgg16 import VGG16
+from keras.applications.vgg19 import VGG19
+from keras.applications.inception_v3 import InceptionV3
+
 from keras.engine import Input
 from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
 from keras.models import Sequential, Merge, Model
 
+from keras import optimizers
+
 from model_checkpoints import MyModelCheckpoint
 
+adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
 
 def create_image_model(images_shape, repeat_count):
     inputs = Input(shape=images_shape)
@@ -51,15 +59,15 @@ def create_model(images_shape, dict_size, sentence_len):
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer='rmsprop')
+    combined_model.compile(loss = 'sparse_categorical_crossentropy', optimizer = nadam)
 
     return combined_model
 
 
-def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset, images_dset, batch_size=50):
+def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset, images_dset, batch_size = 50):
     num_sentences = sentences_dset.shape[0]
     while 1:
-        indices = np.random.randint(num_sentences, size=batch_size)
+        indices = np.random.randint(num_sentences, size = batch_size)
 
         # todo: move generation of partial sentences to preprocessing?
         # select partial sentence end point for each sentence
@@ -67,7 +75,7 @@ def prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_
         # so we can select partial sentence length be from 1 up to (1 + original sentence len)
         # (in the last case we predict the <END> label)
         sentences_len_data = [sentences_len_dset[ind] for ind in indices]
-        partial_lengths = [1 + np.random.randint(0, high=sent_len + 1) for sent_len in sentences_len_data]
+        partial_lengths = [1 + np.random.randint(0, high = sent_len + 1) for sent_len in sentences_len_data]
 
         sentences_data = []
         truth_data = []
@@ -102,7 +110,7 @@ def train_model(h5_data_file, dict_size):
 
     model.fit_generator(generator=prepare_batch(sentence_len, sentences_dset, sentences_len_dset, sent_to_img_dset,
                                                 images_dset),
-                        samples_per_epoch=1000, nb_epoch=100, callbacks=[tb, cp])
+                        samples_per_epoch=1000, nb_epoch=20, callbacks=[tb, cp])
 
 
 if __name__ == '__main__':
