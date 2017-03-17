@@ -10,6 +10,7 @@ import tensorflow as tf
 
 from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
+from keras.applications.resnet50 import ResNet50
 from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
 
@@ -62,7 +63,7 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-    combined_model.compile(loss = 'sparse_categorical_crossentropy', optimizer = optimizer)
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=nadam)
 
     return combined_model
 
@@ -83,17 +84,33 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
         yield [images_data, sentences_data], truth_data
 
 
-def train_model(h5_images_file, h5_text_file, dict_size, weight_save_period, samples_per_epoch, num_epoch, batch_size,
-                start_weights_path):
-    images_dset = h5_images_file['images']
-    sent_to_img_dset = h5_text_file['sentences_to_img']
-    sentences_dset = h5_text_file['sentences']
-    sentences_next_dset = h5_text_file['sentences_next']
+def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
+                weight_save_period=None, samples_per_epoch=None, num_epoch=None, batch_size=None,
+                h5_images_val=None, h5_text_val=None, val_samples=None):
 
-    sentence_len = len(sentences_dset[0])
-    image_shape = images_dset.shape[1:]
+    # Train
+    images_train = h5_images_train['images']
+    sent_to_img_train = h5_text_train['sentences_to_img']
+    sentences_train = h5_text_train['sentences']
+    sentences_next_train = h5_text_train['sentences_next']
 
-    model = create_model(image_shape, dict_size, sentence_len)
+    # Val
+    if h5_images_val and h5_text_val and val_samples:
+        images_val = h5_images_val['images']
+        sent_to_img_val = h5_text_val['sentences_to_img']
+        sentences_val = h5_text_val['sentences']
+        sentences_next_val = h5_text_val['sentences_next']
+
+        # initialize val generator
+        val_stream = prepare_batch(sentences_val, sentences_next_val, sent_to_img_val, images_val, batch_size)
+    else:
+        val_stream = None
+        val_samples = None
+
+    sentence_len = len(sentences_train[0])
+    image_shape = images_train.shape[1:]
+
+    model = create_model(image_shape, dict_size_train, sentence_len)
     if start_weights_path is not None:
         model.load_weights(start_weights_path)
         print('Using start weights: "{}"'.format(start_weights_path))
@@ -101,9 +118,15 @@ def train_model(h5_images_file, h5_text_file, dict_size, weight_save_period, sam
     tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
     cp = MyModelCheckpoint("model_output", "weights", weight_save_period)
 
-    model.fit_generator(generator=prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset,
-                                                images_dset, batch_size),
-                        samples_per_epoch=samples_per_epoch, nb_epoch=num_epoch, callbacks=[tb, cp])
+    # Initialize train generator
+    train_stream = prepare_batch(sentences_train, sentences_next_train, sent_to_img_train, images_train, batch_size)
+
+    model.fit_generator(generator=train_stream,
+                        samples_per_epoch=samples_per_epoch,
+                        validation_data=val_stream,
+                        nb_val_samples=val_samples,
+                        nb_epoch=num_epoch,
+                        callbacks=[tb, cp])
 
 
 if __name__ == '__main__':
@@ -113,17 +136,21 @@ if __name__ == '__main__':
                         default=42, type=int)
     parser.add_argument('--cuda_devices',
                         default=None)
-    parser.add_argument('--id_to_word_file',
-                        default='output/id_to_word.json')
-    parser.add_argument('--preprocessed_images_file',
-                        default='output/preprocessed_images.h5')
-    parser.add_argument('--preprocessed_text_file',
-                        default='output/preprocessed_text.h5')
+
+    parser.add_argument('--preprocessed_train',
+                        default='output_train')
+    parser.add_argument('--preprocessed_test',
+                        default=None)
+    parser.add_argument('--preprocessed_val',
+                        default=None)
+
     parser.add_argument('--weight_save_epoch_period',
                         default=1, type=int)
     parser.add_argument('--batch_size',
                         default=50, type=int)
     parser.add_argument('--samples_per_epoch',
+                        default=1000, type=int)
+    parser.add_argument('--samples_val',
                         default=1000, type=int)
     parser.add_argument('--num_epoch',
                         default=100, type=int)
@@ -139,10 +166,34 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     tf.set_random_seed(args.seed)
 
-    with open(args.id_to_word_file, 'r') as f:
-        dict_size = len(json.load(f))
+    # Train data
+    id_to_word_train = os.path.join(args.preprocessed_train, 'id_to_word.json')
+    with open(id_to_word_train, 'r') as f:
+        dict_size_train = len(json.load(f))
 
-    with h5py.File(args.preprocessed_images_file, 'r') as h5_images_file, \
-            h5py.File(args.preprocessed_text_file, 'r') as h5_text_file:
-        train_model(h5_images_file, h5_text_file, dict_size, args.weight_save_epoch_period, args.samples_per_epoch,
-                    args.num_epoch, args.batch_size, args.start_weights_path)
+    preprocessed_images_train = os.path.join(args.preprocessed_train, 'preprocessed_images.h5')
+    preprocessed_text_train = os.path.join(args.preprocessed_train, 'preprocessed_text.h5')
+
+    # Val data
+    if args.preprocessed_val is not None:
+        preprocessed_images_val = os.path.join(args.preprocessed_val, 'preprocessed_images.h5')
+        preprocessed_text_val = os.path.join(args.preprocessed_val, 'preprocessed_text.h5')
+
+        h5_images_val = h5py.File(preprocessed_images_val, 'r')
+        h5_text_val = h5py.File(preprocessed_text_val, 'r')
+    else:
+        h5_images_val, h5_text_val = None, None
+
+    with h5py.File(preprocessed_images_train, 'r') as h5_images_train, \
+            h5py.File(preprocessed_text_train, 'r') as h5_text_train:
+
+        train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,  # train data
+                    h5_images_val=h5_images_val, h5_text_val=h5_text_val, val_samples=args.samples_val,  # val data
+                    weight_save_period=args.weight_save_epoch_period,
+                    samples_per_epoch=args.samples_per_epoch,
+                    num_epoch=args.num_epoch,
+                    batch_size=args.batch_size)
+
+    if h5_text_val and h5_images_val:
+        h5_text_val.close()
+        h5_images_val.close()
