@@ -48,7 +48,7 @@ def create_sentence_model(dict_size, sentence_len, pretrained_emb):
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
 
-    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
+    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U = 0.1, dropout_W = 0.2))
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
 
@@ -66,15 +66,12 @@ def create_sentence_model_lstm(dict_size, sentence_len, pretrained_emb):
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
 
-    sentence_model.add(LSTM(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
+    sentence_model.add(LSTM(output_dim=128, return_sequences=True, dropout_U = 0.1, dropout_W = 0.2))
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
 
 
 def create_optimizer(settings):
-    # adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-    # nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
-
     if settings.optimizer == 'adam':
         return keras.optimizers.Adam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
                                      epsilon=settings.epsilon, decay=settings.decay)
@@ -93,8 +90,7 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
-    #    combined_model.add(LSTM(256, return_sequences=False))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U = 0.1, dropout_W = 0.2))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
@@ -116,7 +112,7 @@ def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pre
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-    combined_model.add(LSTM(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
+    combined_model.add(LSTM(256, return_sequences=False, dropout_U = 0.1, dropout_W = 0.2))
     #    combined_model.add(LSTM(256, return_sequences=False))
 
     combined_model.add(Dense(dict_size))
