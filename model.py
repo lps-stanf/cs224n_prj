@@ -57,6 +57,7 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
     combined_model.add(GRU(256, return_sequences=False))
+    combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
