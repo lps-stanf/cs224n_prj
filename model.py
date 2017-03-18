@@ -132,31 +132,6 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-
-    parser.add_argument('--seed',
-                        default=42, type=int)
-    parser.add_argument('--cuda_devices',
-                        default=None)
-
-    parser.add_argument('--preprocessed_train',
-                        default='output_train')
-    parser.add_argument('--preprocessed_test',
-                        default=None)
-    parser.add_argument('--preprocessed_val',
-                        default=None)
-
-    parser.add_argument('--weight_save_epoch_period',
-                        default=1, type=int)
-    parser.add_argument('--batch_size',
-                        default=50, type=int)
-    parser.add_argument('--samples_per_epoch',
-                        default=1000, type=int)
-    parser.add_argument('--samples_val',
-                        default=1000, type=int)
-    parser.add_argument('--num_epoch',
-                        default=100, type=int)
-    parser.add_argument('--start_weights_path', help='Optional path to start weights for the model',
-                        default=None)
     parser.add_argument('--model_id',
                         default=datetime.datetime.now().isoformat(), type=str)
 
@@ -165,6 +140,8 @@ if __name__ == '__main__':
     settings = SettingsKeeper()
     settings.add_parsed_arguments(args)
     settings.add_ini_file('settings.ini')
+    if os.path.isfile('user_settings.ini'):
+        settings.add_ini_file('user_settings.ini')
 
     if settings.cuda_devices is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = settings.cuda_devices
