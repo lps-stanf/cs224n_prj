@@ -53,6 +53,24 @@ def create_sentence_model(dict_size, sentence_len, pretrained_emb):
     return sentence_model
 
 
+def create_sentence_model_lstm(dict_size, sentence_len, pretrained_emb):
+    sentence_model = Sequential()
+
+    if pretrained_emb is not None:
+        # read initial matrix
+        word_dim = pretrained_emb.shape[0]
+        embed_dim = pretrained_emb.shape[1]
+        sentence_model.add(Embedding(word_dim, embed_dim, input_length=sentence_len, mask_zero=True,
+                                     weights=[pretrained_emb]))
+    else:
+        # + 1 to respect masking
+        sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
+
+    sentence_model.add(LSTM(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
+    sentence_model.add(TimeDistributed(Dense(128)))
+    return sentence_model
+
+
 def create_optimizer(settings):
     # adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
     # nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
@@ -88,13 +106,38 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
     return combined_model
 
 
+def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+    # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
+    image_model = create_image_model(images_shape, sentence_len)
+
+    # outputs (None, sentence_len, 128)
+    sentence_model = create_sentence_model_lstm(dict_size, sentence_len, pretrained_emb)
+
+    combined_model = Sequential()
+    combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
+
+    combined_model.add(LSTM(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
+    #    combined_model.add(LSTM(256, return_sequences=False))
+
+    combined_model.add(Dense(dict_size))
+    combined_model.add(Activation('softmax'))
+
+    # input words are 1-indexed and 0 index is used for masking!
+    # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
+    return combined_model
+
+
 def create_model(images_shape, dict_size, sentence_len, settings):
     model_creators = {
-        'default_model': create_default_model
+        'default_model': create_default_model,
+        'lstm_nadam_model': create_lstm_nadam_model
     }
 
     # Pretrained embeddings
     if settings.pretrained_word_vectors_file:
+        print('Loading word_vectors file "{0}"'.format(settings.pretrained_word_vectors_file))
         pretrained_emb = np.load(settings.pretrained_word_vectors_file)
     else:
         pretrained_emb = None
