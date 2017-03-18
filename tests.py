@@ -64,7 +64,7 @@ def create_caption_for_path(source_path, model, model_resolution, sentence_max_l
                                  TokenEndIndex, id_to_word_dict)
 
 
-def perform_testing(settings, id_to_word_dict, embed_matrix):
+def perform_testing(settings, id_to_word_dict):
     from preprocess import TokenBegin, TokenEnd
 
     with h5py.File(settings.preprocessed_images_file, 'r') as h5_images_file:
@@ -78,7 +78,7 @@ def perform_testing(settings, id_to_word_dict, embed_matrix):
     TokenBeginIndex = find_token_index(id_to_word_dict, TokenBegin)
     TokenEndIndex = find_token_index(id_to_word_dict, TokenEnd)
 
-    model = create_model(image_shape, dict_size, sentence_max_len, settings, embed_matrix)
+    model = create_model(image_shape, dict_size, sentence_max_len, settings)
     model.load_weights(settings.weights_filename)
 
     create_caption_for_path(settings.test_source, model, image_shape[:2], sentence_max_len, TokenBeginIndex, TokenEndIndex,
@@ -105,16 +105,10 @@ def main_func():
     if settings.cuda_devices is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = settings.cuda_devices
 
-    # Pretrained embeddings
-    if settings.use_pretrained_word_vectors:
-        embed_matrix = np.load(os.path.join(settings.preprocessed_embeddings_dir, 'initial_word_embeddings_matrix.npy'))
-    else:
-        embed_matrix = None
-
     with open(settings.id_to_word_file, 'r') as f:
         id_to_word_dict = json.load(f)
         id_to_word_dict = {int(k): v for k, v in id_to_word_dict.items()}
-        perform_testing(settings, id_to_word_dict, embed_matrix)
+        perform_testing(settings, id_to_word_dict)
 
 
 if __name__ == '__main__':
