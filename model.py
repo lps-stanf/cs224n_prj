@@ -15,7 +15,7 @@ from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
 
 from keras.engine import Input
-from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
+from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector, Dropout
 from keras.models import Sequential, Merge, Model
 
 from model_checkpoints import MyModelCheckpoint

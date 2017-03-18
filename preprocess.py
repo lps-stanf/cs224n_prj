@@ -221,6 +221,7 @@ def main_func():
     parser.add_argument('--captions_file',
                         default='data/annotations/captions_train2014.json')
     parser.add_argument('--output_dir',
+                        default='output_train')
     parser.add_argument('--images_folder',
                         default="data/train2014")
     parser.add_argument('--train_data',
