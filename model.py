@@ -137,11 +137,12 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    settings_ini_section = 'model'
     settings = SettingsKeeper()
     settings.add_parsed_arguments(args)
-    settings.add_ini_file('settings.ini')
+    settings.add_ini_file('settings.ini', settings_ini_section)
     if os.path.isfile('user_settings.ini'):
-        settings.add_ini_file('user_settings.ini')
+        settings.add_ini_file('user_settings.ini', settings_ini_section, False)
 
     if settings.cuda_devices is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = settings.cuda_devices
