@@ -217,11 +217,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--captionsFile',
-                        default='data/captions_train2014.json')
+                        default='data/annotations/captions_train2014.json')
     parser.add_argument('--max_sentence_length',
                         default=16, type=int)
     parser.add_argument('--min_token_instances',
-                        default=15, type=int)
+                        default=5, type=int)
     parser.add_argument('--output_dir',
                         default='output')
     parser.add_argument('--max_images',
