@@ -43,13 +43,14 @@ class SettingsKeeper(object):
                 option_key_list.pop(0)
             self._add_key_value(option_key_list[0], option_value, type)
 
-    def add_ini_file(self, ini_file_path, section_name=None, require_provided_section=True):
+    def add_ini_file(self, ini_file_path, sections_list=None, require_provided_sections=True):
         config_parser = ConfigParser(allow_no_value=True)
         with open(ini_file_path, 'r') as f:
             config_parser.read_file(f)
 
-        if section_name is not None:
-            self._add_ini_file_section(config_parser, section_name, require_provided_section)
+        if sections_list is not None:
+            for section in sections_list:
+                self._add_ini_file_section(config_parser, section, require_provided_sections)
         else:
             for section in config_parser.sections():
                 self._add_ini_file_section(config_parser, section)
