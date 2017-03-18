@@ -55,6 +55,6 @@ class SettingsKeeper(object):
             for section in config_parser.sections():
                 self._add_ini_file_section(config_parser, section)
 
-    def add_parsed_arguments(self, args: argparse.Namespace):
+    def add_parsed_arguments(self, args=argparse.Namespace):
         for prop, val in vars(args).items():
             self._add_key_value(prop, val)
