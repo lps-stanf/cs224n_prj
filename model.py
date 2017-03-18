@@ -15,7 +15,7 @@ from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
 
 from keras.engine import Input
-from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector
+from keras.layers import GlobalMaxPooling2D, GRU, LSTM, Dense, Activation, Embedding, TimeDistributed, RepeatVector, Dropout
 from keras.models import Sequential, Merge, Model
 
 from model_checkpoints import MyModelCheckpoint
@@ -42,6 +42,7 @@ def create_sentence_model(dict_size, sentence_len):
     # + 1 to respect masking
     sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
     sentence_model.add(GRU(output_dim=128, return_sequences=True))
+#    sentence_model.add(LSTM(output_dim=128, return_sequences=True))
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
 
@@ -56,7 +57,9 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
+
     combined_model.add(GRU(256, return_sequences=False))
+#    combined_model.add(LSTM(256, return_sequences=False))
     combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
