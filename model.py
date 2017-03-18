@@ -131,19 +131,19 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
                         callbacks=[tb, cp])
 
 
-if __name__ == '__main__':
+def main_func():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_id',
                         default=datetime.datetime.now().isoformat(), type=str)
 
     args = parser.parse_args()
 
-    settings_ini_section = 'model'
+    settings_ini_section_list = ['model']
     settings = SettingsKeeper()
-    settings.add_parsed_arguments(args)
-    settings.add_ini_file('settings.ini', settings_ini_section)
+    settings.add_ini_file('settings.ini', settings_ini_section_list)
     if os.path.isfile('user_settings.ini'):
-        settings.add_ini_file('user_settings.ini', settings_ini_section, False)
+        settings.add_ini_file('user_settings.ini', settings_ini_section_list, False)
+    settings.add_parsed_arguments(args)
 
     if settings.cuda_devices is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = settings.cuda_devices
@@ -173,7 +173,8 @@ if __name__ == '__main__':
     with h5py.File(preprocessed_images_train, 'r') as h5_images_train, \
             h5py.File(preprocessed_text_train, 'r') as h5_text_train:
 
-        train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,  # train data
+        train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,
+                    # train data
                     h5_images_val=h5_images_val, h5_text_val=h5_text_val, val_samples=settings.samples_val,  # val data
                     weight_save_period=settings.weight_save_epoch_period,
                     samples_per_epoch=settings.samples_per_epoch,
@@ -185,3 +186,7 @@ if __name__ == '__main__':
     if h5_text_val and h5_images_val:
         h5_text_val.close()
         h5_images_val.close()
+
+
+if __name__ == '__main__':
+    main_func()
