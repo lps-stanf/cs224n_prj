@@ -213,7 +213,8 @@ def add_images_data(h5_file, filenames, num_processed_images, images_folder, ima
 def preprocess(config):
     filtered_images_info = get_filtered_images_info(config.captions_file, config.max_sentence_length)
 
-    if config.train_data is not None:
+    use_train_data = (config.train_data is not None)
+    if use_train_data:
         word_to_id = json.load(open(os.path.join(config.train_data, 'word_to_id.json')))
         id_to_word = json.load(open(os.path.join(config.train_data, 'id_to_word.json')))
     else:
@@ -225,7 +226,7 @@ def preprocess(config):
     with open(os.path.join(config.output_dir, 'id_to_word.json'), 'w') as f:
         json.dump(id_to_word, f)
 
-    if config.pretrained_word_embeddings is not None:
+    if not use_train_data and config.pretrained_word_embeddings is not None:
         # preparing numpy embedding matrix, saving it to output_dir
         emb_matrix, id_to_word, word_to_id = build_initial_embedding_matrix(
             path_to_embeddings=config.pretrained_word_embeddings, word_2_id=word_to_id)

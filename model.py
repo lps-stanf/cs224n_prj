@@ -66,7 +66,6 @@ def create_optimizer(settings):
 
 
 def create_default_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
-
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -77,7 +76,7 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
-  #    combined_model.add(LSTM(256, return_sequences=False))
+    #    combined_model.add(LSTM(256, return_sequences=False))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
@@ -89,10 +88,17 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
     return combined_model
 
 
-def create_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+def create_model(images_shape, dict_size, sentence_len, settings):
     model_creators = {
         'default_model': create_default_model
     }
+
+    # Pretrained embeddings
+    if settings.pretrained_word_vectors_file:
+        pretrained_emb = np.load(settings.pretrained_word_vectors_file)
+    else:
+        pretrained_emb = None
+
     model_creator = model_creators[settings.model]
     return model_creator(images_shape, dict_size, sentence_len, settings, pretrained_emb)
 
@@ -114,7 +120,7 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
-                h5_images_val=None, h5_text_val=None, settings=None, pretrained_emb=None):
+                h5_images_val=None, h5_text_val=None, settings=None):
     # Train
     images_train = h5_images_train['images']
     sent_to_img_train = h5_text_train['sentences_to_img']
@@ -138,7 +144,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     sentence_len = len(sentences_train[0])
     image_shape = images_train.shape[1:]
 
-    model = create_model(image_shape, dict_size_train, sentence_len, settings, pretrained_emb)
+    model = create_model(image_shape, dict_size_train, sentence_len, settings)
     if settings.start_weights_path is not None:
         model.load_weights(settings.start_weights_path)
         print('Using start weights: "{}"'.format(settings.start_weights_path))
@@ -205,19 +211,13 @@ def main_func():
     else:
         h5_images_val, h5_text_val = None, None
 
-    # Pretrained embeddings
-    if settings.use_pretrained_word_vectors:
-        embed_matrix = np.load(os.path.join(settings.preprocessed_train, 'initial_word_embeddings_matrix.npy'))
-    else:
-        embed_matrix = None
-
     with h5py.File(preprocessed_images_train, 'r') as h5_images_train, \
             h5py.File(preprocessed_text_train, 'r') as h5_text_train:
 
         train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,
                     # train data
                     h5_images_val=h5_images_val, h5_text_val=h5_text_val,
-                    settings=settings, pretrained_emb=embed_matrix)
+                    settings=settings)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()
