@@ -2,6 +2,7 @@ import argparse
 import json
 import string
 import os
+import random
 from collections import Counter
 import h5py
 import numpy as np
@@ -9,6 +10,7 @@ from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
 from threading import Thread, Lock
 from queue import Queue, Empty
+import tensorflow as tf
 
 # special tokens
 from settings_keeper import SettingsKeeper
@@ -84,6 +86,8 @@ def build_vocab(data, min_token_instances):
 
 
 def build_vocab_to_id(vocab):
+    vocab = sorted(vocab)
+
     word_to_id, id_to_word = {}, {}
     next_id = 1
 
@@ -270,15 +274,21 @@ def main_func():
                         default="data/train2014")
     parser.add_argument('--train_data',
                         default=None)
+    parser.add_argument('--model',
+                        default='default_model')
 
     args = parser.parse_args()
 
-    settings_ini_section_list = ['preprocess']
+    settings_ini_section_list = ['preprocess', args.model]
     settings = SettingsKeeper()
     settings.add_ini_file('settings.ini', settings_ini_section_list)
     if os.path.isfile('user_settings.ini'):
         settings.add_ini_file('user_settings.ini', settings_ini_section_list, False)
     settings.add_parsed_arguments(args)
+
+    random.seed(settings.seed)
+    np.random.seed(settings.seed)
+    tf.set_random_seed(settings.seed)
 
     preprocess(settings)
 

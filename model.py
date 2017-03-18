@@ -15,14 +15,12 @@ from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
 
 from keras.engine import Input
-from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector, Dropout
+from keras.layers import GlobalMaxPooling2D, GRU, LSTM, Dense, Activation, Embedding, TimeDistributed, RepeatVector, \
+    Dropout
 from keras.models import Sequential, Merge, Model
 
 from model_checkpoints import MyModelCheckpoint
 from settings_keeper import SettingsKeeper
-
-adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-nadam = keras.optimizers.Nadam(lr=0.002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
 
 
 def create_image_model(images_shape, repeat_count):
@@ -39,6 +37,7 @@ def create_image_model(images_shape, repeat_count):
 
 def create_sentence_model(dict_size, sentence_len, pretrained_emb):
     sentence_model = Sequential()
+
     if pretrained_emb is not None:
         # read initial matrix
         word_dim = pretrained_emb.shape[0]
@@ -48,12 +47,27 @@ def create_sentence_model(dict_size, sentence_len, pretrained_emb):
     else:
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
-    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
+        sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
+
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
 
 
-def create_model(images_shape, dict_size, sentence_len, pretrained_emb, optimizer = nadam):
+
+def create_optimizer(settings):
+    # adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+    # nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
+
+    if settings.optimizer == 'adam':
+        return keras.optimizers.Adam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
+                                     epsilon=settings.epsilon, decay=settings.decay)
+    if settings.optimizer == 'nadam':
+        return keras.optimizers.Nadam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
+                                      epsilon=settings.epsilon, schedule_decay=settings.schedule_decay)
+
+
+def create_default_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -64,6 +78,8 @@ def create_model(images_shape, dict_size, sentence_len, pretrained_emb, optimize
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
+  #    combined_model.add(LSTM(256, return_sequences=False))
+
     combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
@@ -72,9 +88,16 @@ def create_model(images_shape, dict_size, sentence_len, pretrained_emb, optimize
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=nadam)
-
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
+
+
+def create_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+    model_creators = {
+        'default_model': create_default_model
+    }
+    model_creator = model_creators[settings.model]
+    return model_creator(images_shape, dict_size, sentence_len, settings, pretrained_emb)
 
 
 def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size):
@@ -94,10 +117,7 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
-                weight_save_period=None, samples_per_epoch=None, num_epoch=None, batch_size=None,
-                h5_images_val=None, h5_text_val=None, val_samples=None, start_weights_path=None, model_id=None,
-                pretrained_emb=None):
-
+                h5_images_val=None, h5_text_val=None, settings=None, pretrained_emb=None):
     # Train
     images_train = h5_images_train['images']
     sent_to_img_train = h5_text_train['sentences_to_img']
@@ -105,6 +125,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     sentences_next_train = h5_text_train['sentences_next']
 
     # Val
+    val_samples = settings.val_samples
     if h5_images_val and h5_text_val and val_samples:
         images_val = h5_images_val['images']
         sent_to_img_val = h5_text_val['sentences_to_img']
@@ -112,7 +133,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
         sentences_next_val = h5_text_val['sentences_next']
 
         # initialize val generator
-        val_stream = prepare_batch(sentences_val, sentences_next_val, sent_to_img_val, images_val, batch_size)
+        val_stream = prepare_batch(sentences_val, sentences_next_val, sent_to_img_val, images_val, settings.batch_size)
     else:
         val_stream = None
         val_samples = None
@@ -120,35 +141,42 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     sentence_len = len(sentences_train[0])
     image_shape = images_train.shape[1:]
 
-    model = create_model(image_shape, dict_size_train, sentence_len, pretrained_emb)
-    if start_weights_path is not None:
-        model.load_weights(start_weights_path)
-        print('Using start weights: "{}"'.format(start_weights_path))
+    model = create_model(image_shape, dict_size_train, sentence_len, settings, pretrained_emb)
+    if settings.start_weights_path is not None:
+        model.load_weights(settings.start_weights_path)
+        print('Using start weights: "{}"'.format(settings.start_weights_path))
 
-    tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
-    cp = MyModelCheckpoint("model_output", "weights", weight_save_period, model_id=model_id)
+    tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
+                                     write_graph=True)
+    cp = MyModelCheckpoint(settings.model_output_dir, "weights", settings.weight_save_epoch_period,
+                           model_id=settings.model_id)
 
     # Initialize train generator
-    train_stream = prepare_batch(sentences_train, sentences_next_train, sent_to_img_train, images_train, batch_size)
+    train_stream = prepare_batch(sentences_train, sentences_next_train, sent_to_img_train, images_train,
+                                 settings.batch_size)
 
     model.fit_generator(generator=train_stream,
-                        samples_per_epoch=samples_per_epoch,
+                        samples_per_epoch=settings.samples_per_epoch,
                         validation_data=val_stream,
                         nb_val_samples=val_samples,
-                        nb_epoch=num_epoch,
+                        nb_epoch=settings.num_epoch,
                         callbacks=[tb, cp])
 
 
 def main_func():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_id',
-                        default=datetime.datetime.now().isoformat(), type=str)
+                        default=datetime.datetime.now().isoformat('_').replace(':', '_').replace('-', '_'), type=str)
     parser.add_argument('--cuda_devices',
                         default=None)
+    parser.add_argument('--start_weights_path',
+                        default=None)
+    parser.add_argument('--model',
+                        default='default_model')
 
     args = parser.parse_args()
 
-    settings_ini_section_list = ['model']
+    settings_ini_section_list = ['model', args.model]
     settings = SettingsKeeper()
     settings.add_ini_file('settings.ini', settings_ini_section_list)
     if os.path.isfile('user_settings.ini'):
@@ -191,14 +219,8 @@ def main_func():
 
         train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,
                     # train data
-                    h5_images_val=h5_images_val, h5_text_val=h5_text_val, val_samples=settings.samples_val,  # val data
-                    weight_save_period=settings.weight_save_epoch_period,
-                    samples_per_epoch=settings.samples_per_epoch,
-                    num_epoch=settings.num_epoch,
-                    batch_size=settings.batch_size,
-                    start_weights_path=settings.start_weights_path,
-                    model_id=settings.model_id,
-                    pretrained_emb=embed_matrix)
+                    h5_images_val=h5_images_val, h5_text_val=h5_text_val,
+                    settings=settings, pretrained_emb=embed_matrix)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()
