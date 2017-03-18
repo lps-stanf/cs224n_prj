@@ -47,11 +47,10 @@ def create_sentence_model(dict_size, sentence_len, pretrained_emb):
     else:
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
-        sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
 
+    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
-
 
 
 def create_optimizer(settings):
@@ -79,8 +78,6 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
 
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
   #    combined_model.add(LSTM(256, return_sequences=False))
-
-    combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
