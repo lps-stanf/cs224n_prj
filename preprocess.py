@@ -134,7 +134,7 @@ def encode_images_captions(data, word_to_id, max_sentence_len):
 
 
 def preprocess_image(filename, target_size):
-    img = image.load_img(filename, target_size=(224, 224))
+    img = image.load_img(filename, target_size=target_size)
     x = image.img_to_array(img)
     x = np.expand_dims(x, axis=0)
     x = preprocess_input(x)
@@ -143,26 +143,26 @@ def preprocess_image(filename, target_size):
 
 
 def build_initial_embedding_matrix(path_to_embeddings=None, word_2_id=None):
-    f = open(path_to_embeddings, 'r')
-    embeddings = list()
-    new_word_2_id = dict()
-    new_id_2_word = dict()
-    next_id = 1
+    with open(path_to_embeddings, 'r') as f:
+        embeddings = list()
+        new_word_2_id = dict()
+        new_id_2_word = dict()
+        next_id = 1
 
-    # zero vector for masking
-    embedding_len = int(path_to_embeddings.split('.')[-2].rstrip('d'))
-    embeddings.append(np.zeros(embedding_len))
+        # zero vector for masking
+        embedding_len = int(path_to_embeddings.split('.')[-2].rstrip('d'))
+        embeddings.append(np.zeros(embedding_len))
 
-    # word vectors in word_2_id
-    for line in f:
-        values = line.split()
-        word = values[0]
-        coefs = np.asarray(values[1:], dtype='float32')
-        if word in word_2_id:
-            embeddings.append(coefs)
-            new_word_2_id[word] = next_id
-            new_id_2_word[next_id] = word
-            next_id += 1
+        # word vectors in word_2_id
+        for line in f:
+            values = line.split()
+            word = values[0]
+            coefs = np.asarray(values[1:], dtype='float32')
+            if word in word_2_id:
+                embeddings.append(coefs)
+                new_word_2_id[word] = next_id
+                new_id_2_word[next_id] = word
+                next_id += 1
 
     # word vectors for tokens
     for token in [TokenBegin, TokenEnd, TokenUnk]:
