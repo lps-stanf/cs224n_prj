@@ -135,6 +135,8 @@ def main_func():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_id',
                         default=datetime.datetime.now().isoformat(), type=str)
+    parser.add_argument('--cuda_devices',
+                        default=None)
 
     args = parser.parse_args()
 
