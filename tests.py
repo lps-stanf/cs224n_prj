@@ -95,7 +95,7 @@ def main_func():
 
     args = parser.parse_args()
 
-    settings_ini_section_list = ['tests']
+    settings_ini_section_list = ['tests', args.model]
     settings = SettingsKeeper()
     settings.add_ini_file('settings.ini', settings_ini_section_list)
     if os.path.isfile('user_settings.ini'):
