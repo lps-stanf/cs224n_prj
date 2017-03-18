@@ -182,7 +182,7 @@ def main_func():
 
     # Pretrained embeddings
     if settings.use_pretrained_word_vectors:
-        embed_matrix = np.load(os.path.join(settings.preprocessed_train, 'initial_word_embeddings_matrix'))
+        embed_matrix = np.load(os.path.join(settings.preprocessed_train, 'initial_word_embeddings_matrix.npy'))
     else:
         embed_matrix = None
 
