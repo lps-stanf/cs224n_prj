@@ -48,7 +48,13 @@ def create_sentence_model(dict_size, sentence_len):
     return sentence_model
 
 
-def create_model(images_shape, dict_size, sentence_len, optimizer=nadam):
+def create_default_model(images_shape, dict_size, sentence_len, settings):
+    model_creators = {
+        ''
+    }
+
+
+def create_model(images_shape, dict_size, sentence_len, settings):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -114,7 +120,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     sentence_len = len(sentences_train[0])
     image_shape = images_train.shape[1:]
 
-    model = create_model(image_shape, dict_size_train, sentence_len)
+    model = create_model(image_shape, dict_size_train, sentence_len, settings)
     if settings.start_weights_path is not None:
         model.load_weights(settings.start_weights_path)
         print('Using start weights: "{}"'.format(settings.start_weights_path))
@@ -139,7 +145,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
 def main_func():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_id',
-                        default=datetime.datetime.now().isoformat(), type=str)
+                        default=datetime.datetime.now().isoformat('_').replace(':', '_').replace('-', '_'), type=str)
     parser.add_argument('--cuda_devices',
                         default=None)
     parser.add_argument('--start_weights_path',
