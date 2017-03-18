@@ -88,6 +88,8 @@ def perform_testing(preprocessed_images_file, preprocessed_text_file, weights_fi
 def main_func():
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights_filename', required=True)
+    parser.add_argument('--cuda_devices',
+                        default=None)
 
     args = parser.parse_args()
 
