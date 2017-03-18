@@ -9,6 +9,8 @@ from preprocess import preprocess_image
 import numpy as np
 from keras.preprocessing import image
 
+from settings_keeper import SettingsKeeper
+
 
 def create_image_caption(model, image_filename, resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
                          id_to_word_dict):
@@ -65,10 +67,10 @@ def create_caption_for_path(source_path, model, model_resolution, sentence_max_l
 def perform_testing(preprocessed_images_file, preprocessed_text_file, weights_filename, test_source, id_to_word_dict):
     from preprocess import TokenBegin, TokenEnd
 
-    with h5py.File(args.preprocessed_images_file, 'r') as h5_images_file:
+    with h5py.File(preprocessed_images_file, 'r') as h5_images_file:
         image_shape = h5_images_file['images'].shape[1:]
 
-    with h5py.File(args.preprocessed_text_file, 'r') as h5_text_file:
+    with h5py.File(preprocessed_text_file, 'r') as h5_text_file:
         sentence_max_len = len(h5_text_file['sentences'][0])
 
     dict_size = len(id_to_word_dict)
@@ -83,27 +85,28 @@ def perform_testing(preprocessed_images_file, preprocessed_text_file, weights_fi
                          id_to_word_dict)
 
 
-if __name__ == '__main__':
+def main_func():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--preprocessed_text_file',
-                        default='output_train/preprocessed_text.h5')
-    parser.add_argument('--preprocessed_images_file',
-                        default='output_train/preprocessed_images.h5')
     parser.add_argument('--weights_filename', required=True)
-    parser.add_argument('--test_source',
-                        default='test_images')
-    parser.add_argument('--id_to_word_file',
-                        default='output_train/id_to_word.json')
-    parser.add_argument('--cuda_devices',
-                        default=None)
 
     args = parser.parse_args()
 
-    if args.cuda_devices is not None:
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_devices
+    settings_ini_section_list = ['tests']
+    settings = SettingsKeeper()
+    settings.add_ini_file('settings.ini', settings_ini_section_list)
+    if os.path.isfile('user_settings.ini'):
+        settings.add_ini_file('user_settings.ini', settings_ini_section_list, False)
+    settings.add_parsed_arguments(args)
 
-    with open(args.id_to_word_file, 'r') as f:
+    if settings.cuda_devices is not None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = settings.cuda_devices
+
+    with open(settings.id_to_word_file, 'r') as f:
         id_to_word_dict = json.load(f)
         id_to_word_dict = {int(k): v for k, v in id_to_word_dict.items()}
-        perform_testing(args.preprocessed_images_file, args.preprocessed_text_file, args.weights_filename,
-                        args.test_source, id_to_word_dict)
+        perform_testing(settings.preprocessed_images_file, settings.preprocessed_text_file, settings.weights_filename,
+                        settings.test_source, id_to_word_dict)
+
+
+if __name__ == '__main__':
+    main_func()
