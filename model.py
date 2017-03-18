@@ -128,8 +128,18 @@ def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pre
 def create_model(images_shape, dict_size, sentence_len, settings):
     model_creators = {
         'default_model': create_default_model,
-        'lstm_nadam_model': create_lstm_nadam_model
+        'lstm_nadam_model': create_lstm_nadam_model,
+
+        'vanilla_1_05': create_default_model,
+        'vanilla_1_04': create_default_model,
+        'vanilla_5_04': create_default_model,
+        'vanilla_1_03': create_default_model,
+        'vanilla_2_03': create_default_model,
+        'vanilla_5_03': create_default_model,
     }
+
+    print('Using model "{0}"'.format(settings.model))
+
 
     # Pretrained embeddings
     if settings.pretrained_word_vectors_file:
