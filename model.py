@@ -15,7 +15,7 @@ from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
 
 from keras.engine import Input
-from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, TimeDistributed, RepeatVector, Dropout
+from keras.layers import GlobalMaxPooling2D, GRU, LSTM, Dense, Activation, Embedding, TimeDistributed, RepeatVector, Dropout
 from keras.models import Sequential, Merge, Model
 
 from model_checkpoints import MyModelCheckpoint
@@ -42,6 +42,7 @@ def create_sentence_model(dict_size, sentence_len):
     # + 1 to respect masking
     sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
     sentence_model.add(GRU(output_dim=128, return_sequences=True))
+#    sentence_model.add(LSTM(output_dim=128, return_sequences=True))
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
 
@@ -56,7 +57,9 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
+
     combined_model.add(GRU(256, return_sequences=False))
+#    combined_model.add(LSTM(256, return_sequences=False))
     combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
@@ -87,8 +90,7 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
-                weight_save_period=None, samples_per_epoch=None, num_epoch=None, batch_size=None,
-                h5_images_val=None, h5_text_val=None, val_samples=None, start_weights_path=None, model_id=None):
+                h5_images_val=None, h5_text_val=None, settings=None):
 
     # Train
     images_train = h5_images_train['images']
@@ -97,6 +99,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     sentences_next_train = h5_text_train['sentences_next']
 
     # Val
+    val_samples = settings.val_samples
     if h5_images_val and h5_text_val and val_samples:
         images_val = h5_images_val['images']
         sent_to_img_val = h5_text_val['sentences_to_img']
@@ -104,7 +107,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
         sentences_next_val = h5_text_val['sentences_next']
 
         # initialize val generator
-        val_stream = prepare_batch(sentences_val, sentences_next_val, sent_to_img_val, images_val, batch_size)
+        val_stream = prepare_batch(sentences_val, sentences_next_val, sent_to_img_val, images_val, settings.batch_size)
     else:
         val_stream = None
         val_samples = None
@@ -113,21 +116,24 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     image_shape = images_train.shape[1:]
 
     model = create_model(image_shape, dict_size_train, sentence_len)
-    if start_weights_path is not None:
-        model.load_weights(start_weights_path)
-        print('Using start weights: "{}"'.format(start_weights_path))
+    if settings.start_weights_path is not None:
+        model.load_weights(settings.start_weights_path)
+        print('Using start weights: "{}"'.format(settings.start_weights_path))
 
-    tb = keras.callbacks.TensorBoard(log_dir="model_output", histogram_freq=1, write_images=True, write_graph=True)
-    cp = MyModelCheckpoint("model_output", "weights", weight_save_period, model_id=model_id)
+    tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
+                                     write_graph=True)
+    cp = MyModelCheckpoint(settings.model_output_dir, "weights", settings.weight_save_epoch_period,
+                           model_id=settings.model_id)
 
     # Initialize train generator
-    train_stream = prepare_batch(sentences_train, sentences_next_train, sent_to_img_train, images_train, batch_size)
+    train_stream = prepare_batch(sentences_train, sentences_next_train, sent_to_img_train, images_train,
+                                 settings.batch_size)
 
     model.fit_generator(generator=train_stream,
-                        samples_per_epoch=samples_per_epoch,
+                        samples_per_epoch=settings.samples_per_epoch,
                         validation_data=val_stream,
                         nb_val_samples=val_samples,
-                        nb_epoch=num_epoch,
+                        nb_epoch=settings.num_epoch,
                         callbacks=[tb, cp])
 
 
@@ -179,13 +185,8 @@ def main_func():
 
         train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,
                     # train data
-                    h5_images_val=h5_images_val, h5_text_val=h5_text_val, val_samples=settings.samples_val,  # val data
-                    weight_save_period=settings.weight_save_epoch_period,
-                    samples_per_epoch=settings.samples_per_epoch,
-                    num_epoch=settings.num_epoch,
-                    batch_size=settings.batch_size,
-                    start_weights_path=settings.start_weights_path,
-                    model_id=settings.model_id)
+                    h5_images_val=h5_images_val, h5_text_val=h5_text_val,
+                    settings=settings)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()
