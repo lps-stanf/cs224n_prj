@@ -19,6 +19,7 @@ from keras.layers import GlobalMaxPooling2D, GRU, Dense, Activation, Embedding, 
 from keras.models import Sequential, Merge, Model
 
 from model_checkpoints import MyModelCheckpoint
+from settings_keeper import SettingsKeeper
 
 adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
@@ -161,25 +162,29 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.cuda_devices is not None:
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_devices
+    settings = SettingsKeeper()
+    settings.add_parsed_arguments(args)
+    settings.add_ini_file('settings.ini')
 
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    tf.set_random_seed(args.seed)
+    if settings.cuda_devices is not None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = settings.cuda_devices
+
+    random.seed(settings.seed)
+    np.random.seed(settings.seed)
+    tf.set_random_seed(settings.seed)
 
     # Train data
-    id_to_word_train = os.path.join(args.preprocessed_train, 'id_to_word.json')
+    id_to_word_train = os.path.join(settings.preprocessed_train, 'id_to_word.json')
     with open(id_to_word_train, 'r') as f:
         dict_size_train = len(json.load(f))
 
-    preprocessed_images_train = os.path.join(args.preprocessed_train, 'preprocessed_images.h5')
-    preprocessed_text_train = os.path.join(args.preprocessed_train, 'preprocessed_text.h5')
+    preprocessed_images_train = os.path.join(settings.preprocessed_train, 'preprocessed_images.h5')
+    preprocessed_text_train = os.path.join(settings.preprocessed_train, 'preprocessed_text.h5')
 
     # Val data
-    if args.preprocessed_val is not None:
-        preprocessed_images_val = os.path.join(args.preprocessed_val, 'preprocessed_images.h5')
-        preprocessed_text_val = os.path.join(args.preprocessed_val, 'preprocessed_text.h5')
+    if settings.preprocessed_val is not None:
+        preprocessed_images_val = os.path.join(settings.preprocessed_val, 'preprocessed_images.h5')
+        preprocessed_text_val = os.path.join(settings.preprocessed_val, 'preprocessed_text.h5')
 
         h5_images_val = h5py.File(preprocessed_images_val, 'r')
         h5_text_val = h5py.File(preprocessed_text_val, 'r')
@@ -190,13 +195,13 @@ if __name__ == '__main__':
             h5py.File(preprocessed_text_train, 'r') as h5_text_train:
 
         train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,  # train data
-                    h5_images_val=h5_images_val, h5_text_val=h5_text_val, val_samples=args.samples_val,  # val data
-                    weight_save_period=args.weight_save_epoch_period,
-                    samples_per_epoch=args.samples_per_epoch,
-                    num_epoch=args.num_epoch,
-                    batch_size=args.batch_size,
-                    start_weights_path=args.start_weights_path,
-                    model_id=args.model_id)
+                    h5_images_val=h5_images_val, h5_text_val=h5_text_val, val_samples=settings.samples_val,  # val data
+                    weight_save_period=settings.weight_save_epoch_period,
+                    samples_per_epoch=settings.samples_per_epoch,
+                    num_epoch=settings.num_epoch,
+                    batch_size=settings.batch_size,
+                    start_weights_path=settings.start_weights_path,
+                    model_id=settings.model_id)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()
