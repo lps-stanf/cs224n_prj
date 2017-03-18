@@ -15,7 +15,8 @@ from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
 
 from keras.engine import Input
-from keras.layers import GlobalMaxPooling2D, GRU, LSTM, Dense, Activation, Embedding, TimeDistributed, RepeatVector, Dropout
+from keras.layers import GlobalMaxPooling2D, GRU, LSTM, Dense, Activation, Embedding, TimeDistributed, RepeatVector, \
+    Dropout
 from keras.models import Sequential, Merge, Model
 
 from model_checkpoints import MyModelCheckpoint
@@ -42,12 +43,12 @@ def create_sentence_model(dict_size, sentence_len):
     # + 1 to respect masking
     sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
     sentence_model.add(GRU(output_dim=128, return_sequences=True))
-#    sentence_model.add(LSTM(output_dim=128, return_sequences=True))
+    #    sentence_model.add(LSTM(output_dim=128, return_sequences=True))
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
 
 
-def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
+def create_model(images_shape, dict_size, sentence_len, optimizer=nadam):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -57,9 +58,8 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-
     combined_model.add(GRU(256, return_sequences=False))
-#    combined_model.add(LSTM(256, return_sequences=False))
+    #    combined_model.add(LSTM(256, return_sequences=False))
     combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
@@ -91,7 +91,6 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
                 h5_images_val=None, h5_text_val=None, settings=None):
-
     # Train
     images_train = h5_images_train['images']
     sent_to_img_train = h5_text_train['sentences_to_img']
