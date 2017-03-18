@@ -22,9 +22,6 @@ from keras.models import Sequential, Merge, Model
 from model_checkpoints import MyModelCheckpoint
 from settings_keeper import SettingsKeeper
 
-adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
-
 
 def create_image_model(images_shape, repeat_count):
     inputs = Input(shape=images_shape)
@@ -48,13 +45,19 @@ def create_sentence_model(dict_size, sentence_len):
     return sentence_model
 
 
+def create_optimizer(settings):
+    # adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+    # nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
+
+    if settings.optimizer == 'adam':
+        return keras.optimizers.Adam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
+                                     epsilon=settings.epsilon, decay=settings.decay)
+    if settings.optimizer == 'nadam':
+        return keras.optimizers.Nadam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
+                                      epsilon=settings.epsilon, schedule_decay=settings.schedule_decay)
+
+
 def create_default_model(images_shape, dict_size, sentence_len, settings):
-    model_creators = {
-        ''
-    }
-
-
-def create_model(images_shape, dict_size, sentence_len, settings):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -74,9 +77,16 @@ def create_model(images_shape, dict_size, sentence_len, settings):
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=nadam)
-
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
+
+
+def create_model(images_shape, dict_size, sentence_len, settings):
+    model_creators = {
+        'default_model': create_default_model
+    }
+    model_creator = model_creators[settings.model]
+    return model_creator(images_shape, dict_size, sentence_len, settings)
 
 
 def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size):
@@ -150,10 +160,12 @@ def main_func():
                         default=None)
     parser.add_argument('--start_weights_path',
                         default=None)
+    parser.add_argument('--model',
+                        default='default_model')
 
     args = parser.parse_args()
 
-    settings_ini_section_list = ['model']
+    settings_ini_section_list = ['model', args.model]
     settings = SettingsKeeper()
     settings.add_ini_file('settings.ini', settings_ini_section_list)
     if os.path.isfile('user_settings.ini'):

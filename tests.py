@@ -64,13 +64,13 @@ def create_caption_for_path(source_path, model, model_resolution, sentence_max_l
                                  TokenEndIndex, id_to_word_dict)
 
 
-def perform_testing(preprocessed_images_file, preprocessed_text_file, weights_filename, test_source, id_to_word_dict):
+def perform_testing(settings, id_to_word_dict):
     from preprocess import TokenBegin, TokenEnd
 
-    with h5py.File(preprocessed_images_file, 'r') as h5_images_file:
+    with h5py.File(settings.preprocessed_images_file, 'r') as h5_images_file:
         image_shape = h5_images_file['images'].shape[1:]
 
-    with h5py.File(preprocessed_text_file, 'r') as h5_text_file:
+    with h5py.File(settings.preprocessed_text_file, 'r') as h5_text_file:
         sentence_max_len = len(h5_text_file['sentences'][0])
 
     dict_size = len(id_to_word_dict)
@@ -78,10 +78,10 @@ def perform_testing(preprocessed_images_file, preprocessed_text_file, weights_fi
     TokenBeginIndex = find_token_index(id_to_word_dict, TokenBegin)
     TokenEndIndex = find_token_index(id_to_word_dict, TokenEnd)
 
-    model = create_model(image_shape, dict_size, sentence_max_len)
-    model.load_weights(weights_filename)
+    model = create_model(image_shape, dict_size, sentence_max_len, settings)
+    model.load_weights(settings.weights_filename)
 
-    create_caption_for_path(test_source, model, image_shape[:2], sentence_max_len, TokenBeginIndex, TokenEndIndex,
+    create_caption_for_path(settings.test_source, model, image_shape[:2], sentence_max_len, TokenBeginIndex, TokenEndIndex,
                          id_to_word_dict)
 
 
@@ -90,6 +90,8 @@ def main_func():
     parser.add_argument('--weights_filename', required=True)
     parser.add_argument('--cuda_devices',
                         default=None)
+    parser.add_argument('--model',
+                        default='default_model')
 
     args = parser.parse_args()
 
@@ -106,8 +108,7 @@ def main_func():
     with open(settings.id_to_word_file, 'r') as f:
         id_to_word_dict = json.load(f)
         id_to_word_dict = {int(k): v for k, v in id_to_word_dict.items()}
-        perform_testing(settings.preprocessed_images_file, settings.preprocessed_text_file, settings.weights_filename,
-                        settings.test_source, id_to_word_dict)
+        perform_testing(settings, id_to_word_dict)
 
 
 if __name__ == '__main__':
