@@ -11,6 +11,8 @@ from threading import Thread, Lock
 from queue import Queue, Empty
 
 # special tokens
+from settings_keeper import SettingsKeeper
+
 TokenUnk = '<UNK>'
 TokenBegin = '<BEGIN>'
 TokenEnd = '<END>'
@@ -172,29 +174,29 @@ def add_images_data(h5_file, filenames, num_processed_images, images_folder, ima
     q.join()
 
 
-def preprocess(args):
-    filtered_images_info = get_filtered_images_info(args.captionsFile, args.max_sentence_length)
+def preprocess(config):
+    filtered_images_info = get_filtered_images_info(config.captions_file, config.max_sentence_length)
 
-    if args.train_data is not None:
-        word_to_id = json.load(open(os.path.join(args.train_data, 'word_to_id.json')))
-        id_to_word = json.load(open(os.path.join(args.train_data, 'id_to_word.json')))
+    if config.train_data is not None:
+        word_to_id = json.load(open(os.path.join(config.train_data, 'word_to_id.json')))
+        id_to_word = json.load(open(os.path.join(config.train_data, 'id_to_word.json')))
     else:
-        vocab = build_vocab(filtered_images_info, args.min_token_instances)
+        vocab = build_vocab(filtered_images_info, config.min_token_instances)
         word_to_id, id_to_word = build_vocab_to_id(vocab)
 
-    with open(os.path.join(args.output_dir, 'word_to_id.json'), 'w') as f:
+    with open(os.path.join(config.output_dir, 'word_to_id.json'), 'w') as f:
         json.dump(word_to_id, f)
-    with open(os.path.join(args.output_dir, 'id_to_word.json'), 'w') as f:
+    with open(os.path.join(config.output_dir, 'id_to_word.json'), 'w') as f:
         json.dump(id_to_word, f)
 
-    encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, args.max_sentence_length)
-    with open(os.path.join(args.output_dir, 'id_to_img.json'), 'w') as f:
+    encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, config.max_sentence_length)
+    with open(os.path.join(config.output_dir, 'id_to_img.json'), 'w') as f:
         json.dump({ind: val[0] for ind, val in enumerate(encoded_images_info)}, f)
 
     num_images = len(encoded_images_info)
     num_processed_images = num_images
-    if args.max_images > 0:
-        num_processed_images = min(num_processed_images, args.max_images)
+    if config.max_images > 0:
+        num_processed_images = min(num_processed_images, config.max_images)
 
     # list of tuples (img_index, encoded partial sentence, next word)
     sentences_data = [(img_ind, sent[0], sent[1]) for img_ind, img_data in enumerate(encoded_images_info) for sent in
@@ -203,35 +205,39 @@ def preprocess(args):
     sentence_to_img = np.asarray([x[0] for x in sentences_data], dtype=np.int32)
     sentences_array = np.array([x[1] for x in sentences_data], dtype=np.int32)
     sentences_next = np.array([x[2] for x in sentences_data], dtype=np.int32)
-    with h5py.File(os.path.join(args.output_dir, 'preprocessed_text.h5'), 'w') as h5_file:
+    with h5py.File(os.path.join(config.output_dir, 'preprocessed_text.h5'), 'w') as h5_file:
         h5_file.create_dataset('sentences_to_img', data=sentence_to_img)
         h5_file.create_dataset('sentences_next', data=sentences_next)
         h5_file.create_dataset('sentences', data=sentences_array)
 
-    with h5py.File(os.path.join(args.output_dir, 'preprocessed_images.h5'), 'w') as h5_file:
-        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, args.images_folder,
-                        args.image_work_threads)
+    with h5py.File(os.path.join(config.output_dir, 'preprocessed_images.h5'), 'w') as h5_file:
+        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, config.images_folder,
+                        config.image_work_threads)
 
 
-if __name__ == '__main__':
+def main_func():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--captionsFile',
-                        default='data/captions_train2014.json')
-    parser.add_argument('--max_sentence_length',
-                        default=16, type=int)
-    parser.add_argument('--min_token_instances',
-                        default=15, type=int)
+    parser.add_argument('--captions_file',
+                        default='data/annotations/captions_train2014.json')
     parser.add_argument('--output_dir',
-                        default='output')
-    parser.add_argument('--max_images',
-                        default=0, type=int)
+                        default='output_train')
     parser.add_argument('--images_folder',
                         default="data/train2014")
-    parser.add_argument('--image_work_threads',
-                        default=8, type=int)
     parser.add_argument('--train_data',
                         default=None)
 
     args = parser.parse_args()
-    preprocess(args)
+
+    settings_ini_section_list = ['preprocess']
+    settings = SettingsKeeper()
+    settings.add_ini_file('settings.ini', settings_ini_section_list)
+    if os.path.isfile('user_settings.ini'):
+        settings.add_ini_file('user_settings.ini', settings_ini_section_list, False)
+    settings.add_parsed_arguments(args)
+
+    preprocess(settings)
+
+
+if __name__ == '__main__':
+    main_func()
