@@ -35,7 +35,7 @@ def create_image_caption(model, image_filename, resolution, sentence_max_len, To
 
     result_sentence = ""
     for cur_code in current_sentence[0]:
-        result_sentence += id_to_word_dict[cur_code]
+        result_sentence += id_to_word_dict[str(cur_code)]
         result_sentence += ' '
         if cur_code == TokenEndIndex:
             break

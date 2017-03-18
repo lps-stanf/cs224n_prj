@@ -14,9 +14,9 @@ class MyModelCheckpoint(keras.callbacks.Callback):
         # we want 1-indexed epoch in output
         epoch += 1
         if 'val_loss' in logs:
-            self.log_file.write('Epoch {0}: Train {1}, Val{2}\n'.format(epoch, logs['loss'], logs['val_loss']))
+            self.log_file.write('Epoch {0}\tTrain {1}\t Val{2}\n'.format(epoch, logs['loss'], logs['val_loss']))
         else:
-            self.log_file.write('Epoch {0}: Train {1}\n'.format(epoch, logs['loss']))
+            self.log_file.write('Epoch {0}\t Train {1}\n'.format(epoch, logs['loss']))
 
         if epoch % self.period == 0:
             filename = '{}_{}_{:04}.hdf5'.format(self.path_begin, self.model_id, epoch)

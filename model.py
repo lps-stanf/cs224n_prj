@@ -35,14 +35,23 @@ def create_image_model(images_shape, repeat_count):
     return Model(inputs, x, 'image_model')
 
 
-def create_sentence_model(dict_size, sentence_len):
+def create_sentence_model(dict_size, sentence_len, pretrained_emb):
     sentence_model = Sequential()
-    # + 1 to respect masking
-    sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
-    sentence_model.add(GRU(output_dim=128, return_sequences=True))
-    #    sentence_model.add(LSTM(output_dim=128, return_sequences=True))
+
+    if pretrained_emb is not None:
+        # read initial matrix
+        word_dim = pretrained_emb.shape[0]
+        embed_dim = pretrained_emb.shape[1]
+        sentence_model.add(Embedding(word_dim, embed_dim, input_length=sentence_len, mask_zero=True,
+                                     weights=[pretrained_emb]))
+    else:
+        # + 1 to respect masking
+        sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
+        sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
+
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
+
 
 
 def create_optimizer(settings):
@@ -57,18 +66,20 @@ def create_optimizer(settings):
                                       epsilon=settings.epsilon, schedule_decay=settings.schedule_decay)
 
 
-def create_default_model(images_shape, dict_size, sentence_len, settings):
+def create_default_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
     # outputs (None, sentence_len, 128)
-    sentence_model = create_sentence_model(dict_size, sentence_len)
+    sentence_model = create_sentence_model(dict_size, sentence_len, pretrained_emb)
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-    combined_model.add(GRU(256, return_sequences=False))
-    #    combined_model.add(LSTM(256, return_sequences=False))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
+  #    combined_model.add(LSTM(256, return_sequences=False))
+
     combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
@@ -81,12 +92,12 @@ def create_default_model(images_shape, dict_size, sentence_len, settings):
     return combined_model
 
 
-def create_model(images_shape, dict_size, sentence_len, settings):
+def create_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     model_creators = {
         'default_model': create_default_model
     }
     model_creator = model_creators[settings.model]
-    return model_creator(images_shape, dict_size, sentence_len, settings)
+    return model_creator(images_shape, dict_size, sentence_len, settings, pretrained_emb)
 
 
 def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_dset, batch_size):
@@ -106,7 +117,7 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
-                h5_images_val=None, h5_text_val=None, settings=None):
+                h5_images_val=None, h5_text_val=None, settings=None, pretrained_emb=None):
     # Train
     images_train = h5_images_train['images']
     sent_to_img_train = h5_text_train['sentences_to_img']
@@ -130,7 +141,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     sentence_len = len(sentences_train[0])
     image_shape = images_train.shape[1:]
 
-    model = create_model(image_shape, dict_size_train, sentence_len, settings)
+    model = create_model(image_shape, dict_size_train, sentence_len, settings, pretrained_emb)
     if settings.start_weights_path is not None:
         model.load_weights(settings.start_weights_path)
         print('Using start weights: "{}"'.format(settings.start_weights_path))
@@ -197,13 +208,19 @@ def main_func():
     else:
         h5_images_val, h5_text_val = None, None
 
+    # Pretrained embeddings
+    if settings.use_pretrained_word_vectors:
+        embed_matrix = np.load(os.path.join(settings.preprocessed_train, 'initial_word_embeddings_matrix.npy'))
+    else:
+        embed_matrix = None
+
     with h5py.File(preprocessed_images_train, 'r') as h5_images_train, \
             h5py.File(preprocessed_text_train, 'r') as h5_text_train:
 
         train_model(h5_images_train=h5_images_train, h5_text_train=h5_text_train, dict_size_train=dict_size_train,
                     # train data
                     h5_images_val=h5_images_val, h5_text_val=h5_text_val,
-                    settings=settings)
+                    settings=settings, pretrained_emb=embed_matrix)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()
