@@ -57,7 +57,6 @@ def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-
     combined_model.add(GRU(256, return_sequences=False))
 #    combined_model.add(LSTM(256, return_sequences=False))
     combined_model.add(Dropout(0.2))
@@ -138,6 +137,10 @@ def main_func():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_id',
                         default=datetime.datetime.now().isoformat(), type=str)
+    parser.add_argument('--cuda_devices',
+                        default=None)
+    parser.add_argument('--start_weights_path',
+                        default=None)
 
     args = parser.parse_args()
 
