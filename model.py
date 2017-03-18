@@ -22,7 +22,7 @@ from model_checkpoints import MyModelCheckpoint
 from settings_keeper import SettingsKeeper
 
 adam = keras.optimizers.Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-nadam = keras.optimizers.Nadam(lr=0.0005, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
+nadam = keras.optimizers.Nadam(lr=0.002, beta_1=0.9, beta_2=0.999, epsilon=1e-08, schedule_decay=0.004)
 
 
 def create_image_model(images_shape, repeat_count):
@@ -37,26 +37,33 @@ def create_image_model(images_shape, repeat_count):
     return Model(inputs, x, 'image_model')
 
 
-def create_sentence_model(dict_size, sentence_len):
+def create_sentence_model(dict_size, sentence_len, pretrained_emb):
     sentence_model = Sequential()
-    # + 1 to respect masking
-    sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
-    sentence_model.add(GRU(output_dim=128, return_sequences=True))
+    if pretrained_emb is not None:
+        # read initial matrix
+        word_dim = pretrained_emb.shape[0]
+        embed_dim = pretrained_emb.shape[1]
+        sentence_model.add(Embedding(word_dim, embed_dim, input_length=sentence_len, mask_zero=True,
+                                     weights=[pretrained_emb]))
+    else:
+        # + 1 to respect masking
+        sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
+    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.15, dropout_W=0.15))
     sentence_model.add(TimeDistributed(Dense(128)))
     return sentence_model
 
 
-def create_model(images_shape, dict_size, sentence_len, optimizer = nadam):
+def create_model(images_shape, dict_size, sentence_len, pretrained_emb, optimizer = nadam):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
     # outputs (None, sentence_len, 128)
-    sentence_model = create_sentence_model(dict_size, sentence_len)
+    sentence_model = create_sentence_model(dict_size, sentence_len, pretrained_emb)
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
 
-    combined_model.add(GRU(256, return_sequences=False))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.15, dropout_W=0.15))
     combined_model.add(Dropout(0.2))
 
     combined_model.add(Dense(dict_size))
@@ -88,7 +95,8 @@ def prepare_batch(sentences_dset, sentences_next_dset, sent_to_img_dset, images_
 
 def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
                 weight_save_period=None, samples_per_epoch=None, num_epoch=None, batch_size=None,
-                h5_images_val=None, h5_text_val=None, val_samples=None, start_weights_path=None, model_id=None):
+                h5_images_val=None, h5_text_val=None, val_samples=None, start_weights_path=None, model_id=None,
+                pretrained_emb=None):
 
     # Train
     images_train = h5_images_train['images']
@@ -112,7 +120,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     sentence_len = len(sentences_train[0])
     image_shape = images_train.shape[1:]
 
-    model = create_model(image_shape, dict_size_train, sentence_len)
+    model = create_model(image_shape, dict_size_train, sentence_len, pretrained_emb)
     if start_weights_path is not None:
         model.load_weights(start_weights_path)
         print('Using start weights: "{}"'.format(start_weights_path))
@@ -172,6 +180,12 @@ def main_func():
     else:
         h5_images_val, h5_text_val = None, None
 
+    # Pretrained embeddings
+    if settings.use_pretrained_word_vectors:
+        embed_matrix = np.load(os.path.join(settings.preprocessed_train, 'initial_word_embeddings_matrix'))
+    else:
+        embed_matrix = None
+
     with h5py.File(preprocessed_images_train, 'r') as h5_images_train, \
             h5py.File(preprocessed_text_train, 'r') as h5_text_train:
 
@@ -183,7 +197,8 @@ def main_func():
                     num_epoch=settings.num_epoch,
                     batch_size=settings.batch_size,
                     start_weights_path=settings.start_weights_path,
-                    model_id=settings.model_id)
+                    model_id=settings.model_id,
+                    pretrained_emb=embed_matrix)
 
     if h5_text_val and h5_images_val:
         h5_text_val.close()

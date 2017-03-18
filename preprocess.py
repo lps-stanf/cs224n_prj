@@ -138,6 +138,38 @@ def preprocess_image(filename, target_size):
     return x
 
 
+def build_initial_embedding_matrix(path_to_embeddings=None, word_2_id=None):
+    f = open(path_to_embeddings, 'r')
+    embeddings = list()
+    new_word_2_id = dict()
+    new_id_2_word = dict()
+    next_id = 1
+
+    # zero vector for masking
+    embedding_len = int(path_to_embeddings.split('.')[-2].rstrip('d'))
+    embeddings.append(np.zeros(embedding_len))
+
+    # word vectors in word_2_id
+    for line in f:
+        values = line.split()
+        word = values[0]
+        coefs = np.asarray(values[1:], dtype='float32')
+        if word in word_2_id:
+            embeddings.append(coefs)
+            new_word_2_id[word] = next_id
+            new_id_2_word[next_id] = word
+            next_id += 1
+
+    # word vectors for tokens
+    for token in [TokenBegin, TokenEnd, TokenUnk]:
+        embeddings.append(np.random.uniform(-0.15, 0.15, embedding_len))
+        new_word_2_id[token] = next_id
+        new_id_2_word[next_id] = token
+        next_id += 1
+
+    return np.array(embeddings), new_id_2_word, new_word_2_id
+
+
 def add_images_data(h5_file, filenames, num_processed_images, images_folder, image_work_threads_count):
     filenames_slice = filenames[:num_processed_images]
 
@@ -188,6 +220,18 @@ def preprocess(config):
         json.dump(word_to_id, f)
     with open(os.path.join(config.output_dir, 'id_to_word.json'), 'w') as f:
         json.dump(id_to_word, f)
+
+    if config.pretrained_word_embeddings is not None:
+        # preparing numpy embedding matrix, saving it to output_dir
+        emb_matrix, id_to_word, word_to_id = build_initial_embedding_matrix(
+            path_to_embeddings=config.pretrained_word_embeddings, word_2_id=word_to_id)
+        np.save(os.path.join(config.output_dir, 'initial_word_embeddings_matrix'), emb_matrix)
+
+        # write new word_2_id and id_2_word
+        with open(os.path.join(config.output_dir, 'word_to_id.json'), 'w') as f:
+            json.dump(word_to_id, f)
+        with open(os.path.join(config.output_dir, 'id_to_word.json'), 'w') as f:
+            json.dump(id_to_word, f)
 
     encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, config.max_sentence_length)
     with open(os.path.join(config.output_dir, 'id_to_img.json'), 'w') as f:
