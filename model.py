@@ -137,6 +137,8 @@ def main_func():
                         default=datetime.datetime.now().isoformat(), type=str)
     parser.add_argument('--cuda_devices',
                         default=None)
+    parser.add_argument('--start_weights_path',
+                        default=None)
 
     args = parser.parse_args()
 
