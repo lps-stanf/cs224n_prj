@@ -66,9 +66,9 @@ def create_sentence_model_bidirectional(dict_size, sentence_len, pretrained_emb)
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
 
-    sentence_model.add(Bidirectional(GRU(output_dim=64, return_sequences=True, dropout_U=0.2, dropout_W=0.2),
+    sentence_model.add(Bidirectional(GRU(output_dim=128, return_sequences=True, dropout_U=0.2, dropout_W=0.2),
                                      merge_mode='concat'))
-    sentence_model.add(TimeDistributed(Dense(128)))
+    sentence_model.add(TimeDistributed(Dense(256)))
     return sentence_model
 
 
