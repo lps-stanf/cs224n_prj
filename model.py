@@ -230,7 +230,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
 
     tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
                                      write_graph=True)
-    cp = MyModelCheckpoint(settings.model_output_dir, "weights", settings.weight_save_epoch_period,
+    cp = MyModelCheckpoint(settings.model_output_dir, "w", settings.weight_save_epoch_period,
                            model_id=settings.model_id)
 
     # Initialize train generator
@@ -248,7 +248,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
 def main_func():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_id',
-                        default=datetime.datetime.now().isoformat('_').replace(':', '_').replace('-', '_'), type=str)
+                        default='{0:%y_%m_%d_%H_%M_%S}'.format(datetime.datetime.now()), type=str)
     parser.add_argument('--cuda_devices',
                         default=None)
     parser.add_argument('--start_weights_path',
