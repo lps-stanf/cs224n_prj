@@ -174,17 +174,18 @@ def build_initial_embedding_matrix(path_to_embeddings=None, word_2_id=None):
     return np.array(embeddings), new_id_2_word, new_word_2_id
 
 
-def add_images_data(h5_file, filenames, num_processed_images, images_folder, image_work_threads_count):
+def add_images_data(h5_file, filenames, num_processed_images, settings):
     filenames_slice = filenames[:num_processed_images]
 
-    image_dset = h5_file.create_dataset('images', shape=(num_processed_images, 224, 224, 3))
+    image_dset_shape = (num_processed_images,) + settings.cnn_res + (3,)
+    image_dset = h5_file.create_dataset('images', shape=image_dset_shape)
 
-    num_workers = max(1, min(image_work_threads_count, num_processed_images / 10))
+    num_workers = max(1, min(settings.image_work_threads, num_processed_images / 10))
     lock = Lock()
     q = Queue()
 
     for index, cur_filename in enumerate(filenames_slice):
-        fname = os.path.join(images_folder, cur_filename)
+        fname = os.path.join(settings.images_folder, cur_filename)
         q.put((index, fname))
 
     def worker():
@@ -194,7 +195,7 @@ def add_images_data(h5_file, filenames, num_processed_images, images_folder, ima
             except Empty:
                 break
 
-            preprocessed_image = preprocess_image(filename, (224, 224))
+            preprocessed_image = preprocess_image(filename, settings.cnn_res)
 
             with lock:
                 if index % 1000 == 0:
@@ -210,42 +211,42 @@ def add_images_data(h5_file, filenames, num_processed_images, images_folder, ima
     q.join()
 
 
-def preprocess(config):
-    filtered_images_info = get_filtered_images_info(config.captions_file, config.max_sentence_length)
+def preprocess(settings):
+    filtered_images_info = get_filtered_images_info(settings.captions_file, settings.max_sentence_length)
 
-    use_train_data = (config.train_data is not None)
+    use_train_data = (settings.train_data is not None)
     if use_train_data:
-        word_to_id = json.load(open(os.path.join(config.train_data, 'word_to_id.json')))
-        id_to_word = json.load(open(os.path.join(config.train_data, 'id_to_word.json')))
+        word_to_id = json.load(open(os.path.join(settings.train_data, 'word_to_id.json')))
+        id_to_word = json.load(open(os.path.join(settings.train_data, 'id_to_word.json')))
     else:
-        vocab = build_vocab(filtered_images_info, config.min_token_instances)
+        vocab = build_vocab(filtered_images_info, settings.min_token_instances)
         word_to_id, id_to_word = build_vocab_to_id(vocab)
 
-    with open(os.path.join(config.output_dir, 'word_to_id.json'), 'w') as f:
+    with open(os.path.join(settings.output_dir, 'word_to_id.json'), 'w') as f:
         json.dump(word_to_id, f)
-    with open(os.path.join(config.output_dir, 'id_to_word.json'), 'w') as f:
+    with open(os.path.join(settings.output_dir, 'id_to_word.json'), 'w') as f:
         json.dump(id_to_word, f)
 
-    if not use_train_data and config.pretrained_word_embeddings is not None:
+    if not use_train_data and settings.pretrained_word_embeddings is not None:
         # preparing numpy embedding matrix, saving it to output_dir
         emb_matrix, id_to_word, word_to_id = build_initial_embedding_matrix(
-            path_to_embeddings=config.pretrained_word_embeddings, word_2_id=word_to_id)
-        np.save(os.path.join(config.output_dir, 'initial_word_embeddings_matrix'), emb_matrix)
+            path_to_embeddings=settings.pretrained_word_embeddings, word_2_id=word_to_id)
+        np.save(os.path.join(settings.output_dir, 'initial_word_embeddings_matrix'), emb_matrix)
 
         # write new word_2_id and id_2_word
-        with open(os.path.join(config.output_dir, 'word_to_id.json'), 'w') as f:
+        with open(os.path.join(settings.output_dir, 'word_to_id.json'), 'w') as f:
             json.dump(word_to_id, f)
-        with open(os.path.join(config.output_dir, 'id_to_word.json'), 'w') as f:
+        with open(os.path.join(settings.output_dir, 'id_to_word.json'), 'w') as f:
             json.dump(id_to_word, f)
 
-    encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, config.max_sentence_length)
-    with open(os.path.join(config.output_dir, 'id_to_img.json'), 'w') as f:
+    encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, settings.max_sentence_length)
+    with open(os.path.join(settings.output_dir, 'id_to_img.json'), 'w') as f:
         json.dump({ind: val[0] for ind, val in enumerate(encoded_images_info)}, f)
 
     num_images = len(encoded_images_info)
     num_processed_images = num_images
-    if config.max_images > 0:
-        num_processed_images = min(num_processed_images, config.max_images)
+    if settings.max_images > 0:
+        num_processed_images = min(num_processed_images, settings.max_images)
 
     # list of tuples (img_index, encoded partial sentence, next word)
     sentences_data = [(img_ind, sent[0], sent[1]) for img_ind, img_data in enumerate(encoded_images_info) for sent in
@@ -254,14 +255,13 @@ def preprocess(config):
     sentence_to_img = np.asarray([x[0] for x in sentences_data], dtype=np.int32)
     sentences_array = np.array([x[1] for x in sentences_data], dtype=np.int32)
     sentences_next = np.array([x[2] for x in sentences_data], dtype=np.int32)
-    with h5py.File(os.path.join(config.output_dir, 'preprocessed_text.h5'), 'w') as h5_file:
+    with h5py.File(os.path.join(settings.output_dir, 'preprocessed_text.h5'), 'w') as h5_file:
         h5_file.create_dataset('sentences_to_img', data=sentence_to_img)
         h5_file.create_dataset('sentences_next', data=sentences_next)
         h5_file.create_dataset('sentences', data=sentences_array)
 
-    with h5py.File(os.path.join(config.output_dir, 'preprocessed_images.h5'), 'w') as h5_file:
-        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, config.images_folder,
-                        config.image_work_threads)
+    with h5py.File(os.path.join(settings.output_dir, 'preprocessed_images.h5'), 'w') as h5_file:
+        add_images_data(h5_file, [x[0] for x in encoded_images_info], num_processed_images, settings)
 
 
 def main_func():
@@ -277,6 +277,8 @@ def main_func():
                         default=None)
     parser.add_argument('--model',
                         default='default_model')
+    parser.add_argument('--cnn_res', nargs=2, type=int,
+                        default=[224, 224])
 
     args = parser.parse_args()
 
@@ -286,6 +288,8 @@ def main_func():
     if os.path.isfile('user_settings.ini'):
         settings.add_ini_file('user_settings.ini', settings_ini_section_list, False)
     settings.add_parsed_arguments(args)
+
+    settings.cnn_res = tuple(settings.cnn_res)
 
     random.seed(settings.seed)
     np.random.seed(settings.seed)
