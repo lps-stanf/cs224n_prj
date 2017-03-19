@@ -72,6 +72,7 @@ def create_sentence_model_lstm(dict_size, sentence_len, pretrained_emb):
 
 
 def create_optimizer(settings):
+    print('Creating optimizer: {0}'.format(settings.optimizer))
     if settings.optimizer == 'adam':
         return keras.optimizers.Adam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
                                      epsilon=settings.epsilon, decay=settings.decay)
@@ -136,6 +137,8 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'vanilla_1_03': create_default_model,
         'vanilla_2_03': create_default_model,
         'vanilla_5_03': create_default_model,
+
+        'vanilla_adam_1_03': create_default_model,
     }
 
     print('Using model "{0}"'.format(settings.model))
@@ -241,6 +244,9 @@ def main_func():
     random.seed(settings.seed)
     np.random.seed(settings.seed)
     tf.set_random_seed(settings.seed)
+
+    # Adding model name to the beginning of the result files
+    settings.model_id = '{0}_{1}'.format(settings.model, settings.model_id)
 
     # Train data
     id_to_word_train = os.path.join(settings.preprocessed_train, 'id_to_word.json')

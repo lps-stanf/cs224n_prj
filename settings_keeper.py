@@ -12,6 +12,14 @@ class SettingsKeeper(object):
             raise AttributeError('No such setting: {0}'.format(name))
         return self._settings_dict.get(name)
 
+    def __setattr__(self, key, value):
+        if key == '_settings_dict':
+            object.__setattr__(self, key, value)
+        else:
+            if key not in self._settings_dict:
+                raise AttributeError('No such setting: {0}'.format(key))
+            self._settings_dict[key] = value
+
     def add_dictionary(self, dict):
         for k, v in dict.items():
             self._settings_dict[k] = v
