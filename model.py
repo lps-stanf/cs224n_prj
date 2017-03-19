@@ -75,10 +75,11 @@ def create_optimizer(settings):
     print('Creating optimizer: {0}'.format(settings.optimizer))
     if settings.optimizer == 'adam':
         return keras.optimizers.Adam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
-                                     epsilon=settings.epsilon, decay=settings.decay)
+                                     epsilon=settings.epsilon, decay=settings.decay, clipvalue = 4.0)
     if settings.optimizer == 'nadam':
         return keras.optimizers.Nadam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
-                                      epsilon=settings.epsilon, schedule_decay=settings.schedule_decay)
+                                      epsilon=settings.epsilon, schedule_decay=settings.schedule_decay,
+                                      clipvalue = 4.0)
 
 
 def create_default_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
@@ -90,8 +91,7 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-
-    combined_model.add(GRU(256, return_sequences=False, dropout_U = 0.1, dropout_W = 0.2))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U = 0.2, dropout_W = 0.2))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
@@ -111,11 +111,11 @@ def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pret
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-    combined_model.add(GRU(128, return_sequences = True, dropout_U = 0.15, dropout_W = 0.25))
+    combined_model.add(GRU(256, return_sequences = True, dropout_U = 0.25, dropout_W = 0.25))
 
     combined_model2 = Sequential()
     combined_model2.add(Merge([image_model, combined_model], mode='concat', concat_axis=-1))
-    combined_model2.add(GRU(256, return_sequences = False, dropout_U = 0.1, dropout_W = 0.2))
+    combined_model2.add(GRU(256, return_sequences = False, dropout_U = 0.25, dropout_W = 0.25))
 
     combined_model2.add(Dense(dict_size))
     combined_model2.add(Activation('softmax'))
