@@ -163,6 +163,8 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'GRU_5_04': create_default_model,
         'GRU_stacked': create_GRU_stack_model,
 
+        'GRU_1_03_glove': create_default_model,
+
         'GRU_adam_1_03': create_default_model,
     }
 
