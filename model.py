@@ -155,14 +155,15 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'default_model': create_default_model,
         'lstm_nadam_model': create_lstm_nadam_model,
 
-        'vanilla_1_05': create_default_model,
-        'vanilla_1_04': create_default_model,
-        'vanilla_5_04': create_default_model,
-        'vanilla_1_03': create_default_model,
-        'vanilla_2_03': create_default_model,
-        'vanilla_5_03': create_default_model,
+        'GRU_1_05': create_default_model,
+        'GRU_1_04': create_default_model,
+        'GRU_1_03': create_default_model,
+        'GRU_2_03': create_default_model,
+        'GRU_5_03': create_default_model,
+        'GRU_5_04': create_default_model,
+        'GRU_stacked': create_GRU_stack_model,
 
-        'vanilla_adam_1_03': create_default_model,
+        'GRU_adam_1_03': create_default_model,
     }
 
     print('Using model "{0}"'.format(settings.model))
