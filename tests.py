@@ -52,13 +52,20 @@ def find_token_index(id_to_word_dict, token):
         raise "Didn't find required token"
 
 
+def get_image_files(source_dir):
+    ext_list = ['.jpg', '.jpeg', '.bmp', '.png']
+    files = os.listdir(source_dir)
+    filtered_files = [os.path.join(source_dir, file) for file in files if os.path.splitext(file)[1] in ext_list]
+    return filtered_files
+
+
 def create_caption_for_path(source_path, model, model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
                             id_to_word_dict):
     if os.path.isfile(source_path):
         create_image_caption(model, source_path, model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
                              id_to_word_dict)
     else:
-        images_list = image.list_pictures(source_path)
+        images_list = get_image_files(source_path)
         for cur_image_path in images_list:
             create_image_caption(model, cur_image_path, model_resolution, sentence_max_len, TokenBeginIndex,
                                  TokenEndIndex, id_to_word_dict)
