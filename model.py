@@ -75,10 +75,11 @@ def create_optimizer(settings):
     print('Creating optimizer: {0}'.format(settings.optimizer))
     if settings.optimizer == 'adam':
         return keras.optimizers.Adam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
-                                     epsilon=settings.epsilon, decay=settings.decay)
+                                     epsilon=settings.epsilon, decay=settings.decay, clipvalue = 5.0)
     if settings.optimizer == 'nadam':
         return keras.optimizers.Nadam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
-                                      epsilon=settings.epsilon, schedule_decay=settings.schedule_decay)
+                                      epsilon=settings.epsilon, schedule_decay=settings.schedule_decay,
+                                      clipvalue = 5.0)
 
 
 def create_default_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
@@ -90,8 +91,7 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-
-    combined_model.add(GRU(256, return_sequences=False, dropout_U = 0.1, dropout_W = 0.2))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U = 0.2, dropout_W = 0.2))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
@@ -102,7 +102,7 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
 
-def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pretrained_emb, num_gru_units = 256):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model(images_shape, sentence_len)
 
@@ -111,11 +111,11 @@ def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pret
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-    combined_model.add(GRU(128, return_sequences = True, dropout_U = 0.15, dropout_W = 0.25))
+    combined_model.add(GRU(num_gru_units, return_sequences = True, dropout_U = 0.25, dropout_W = 0.25))
 
     combined_model2 = Sequential()
     combined_model2.add(Merge([image_model, combined_model], mode='concat', concat_axis=-1))
-    combined_model2.add(GRU(256, return_sequences = False, dropout_U = 0.1, dropout_W = 0.2))
+    combined_model2.add(GRU(256, return_sequences = False, dropout_U = 0.25, dropout_W = 0.25))
 
     combined_model2.add(Dense(dict_size))
     combined_model2.add(Activation('softmax'))
@@ -125,6 +125,13 @@ def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pret
 
     combined_model2.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model2
+
+
+    def create_GRU_stack_model128(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+        create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pretrained_emb, 128)
+
+    def create_GRU_stack_model256(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+        create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pretrained_emb, 256)
 
 
 def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
@@ -161,7 +168,8 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'GRU_2_03': create_default_model,
         'GRU_5_03': create_default_model,
         'GRU_5_04': create_default_model,
-        'GRU_stacked': create_GRU_stack_model,
+        'GRU_stacked128': create_GRU_stack_model128,
+        'GRU_stacked256': create_GRU_stack_model256,
 
         'GRU_1_03_glove': create_default_model,
 
