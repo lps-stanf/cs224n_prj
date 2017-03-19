@@ -111,20 +111,20 @@ def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pret
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-    combined_model.add(GRU(192, return_sequences = True, dropout_U = 0.15, dropout_W = 0.25))
+    combined_model.add(GRU(128, return_sequences = True, dropout_U = 0.15, dropout_W = 0.25))
 
     combined_model2 = Sequential()
     combined_model2.add(Merge([image_model, combined_model], mode='concat', concat_axis=-1))
     combined_model2.add(GRU(256, return_sequences = False, dropout_U = 0.1, dropout_W = 0.2))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    combined_model2.add(Dense(dict_size))
+    combined_model2.add(Activation('softmax'))
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
-    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
-    return combined_model
+    combined_model2.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
+    return combined_model2
 
 
 def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
@@ -153,7 +153,7 @@ def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pre
 def create_model(images_shape, dict_size, sentence_len, settings):
     model_creators = {
         'default_model': create_default_model,
-        'lstm_nadam_model': create_lstm_nadam_model,
+        'LSTM_model': create_lstm_nadam_model,
 
         'GRU_1_05': create_default_model,
         'GRU_1_04': create_default_model,
