@@ -5,3 +5,4 @@
 *.jpeg
 __pycache__/
 user_settings.ini
+*.sh
