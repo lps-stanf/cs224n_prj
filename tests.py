@@ -42,14 +42,16 @@ def fit_text_to_box(box_w, text, text_border, font):
     return result_lines
 
 
-def add_label_to_image(src_file, target_file, text):
-    margin = 5
-    font_size = 14
+def add_label_to_image(src_file, target_file, text, max_out_resolution):
+    margin = 10
+    font_size = 18
     with Image.open(src_file) as img:
-        font = ImageFont.truetype("fonts/LibreBaskerville-Regular.ttf", font_size)
+        font = ImageFont.truetype("fonts/LibreBaskerville-Bold.ttf", font_size)
 
-        # fit_text = fit_text_to_box(img.width - 2 * margin, text, 1, font)
-        fit_text = fit_text_to_box(img.width - 2 * margin, text, 0, font)
+        if max_out_resolution is not None:
+            img.thumbnail(max_out_resolution, Image.ANTIALIAS)
+
+        fit_text = fit_text_to_box(img.width - 2 * margin, text, 1, font)
 
         total_text_h = 0
         for text_line, text_line_box in fit_text:
@@ -80,7 +82,7 @@ def add_label_to_image(src_file, target_file, text):
 
 
 def create_image_caption(model, image_filename, resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
-                         id_to_word_dict, output_folder=None):
+                         id_to_word_dict, output_folder=None, max_out_resolution=None):
     preprocessed_image = preprocess_image(image_filename, resolution)
     # adding 1 to the beginning of the image shape so that model can accept it (making batch with one element)
     preprocessed_image = np.expand_dims(preprocessed_image, axis=0)
@@ -101,10 +103,15 @@ def create_image_caption(model, image_filename, resolution, sentence_max_len, To
             break
 
     result_sentence = ""
+    result_words_list = []
+    has_end_token = False
     for cur_code in current_sentence[0]:
-        result_sentence += id_to_word_dict[cur_code]
+        cur_word = id_to_word_dict[cur_code]
+        result_sentence += cur_word
         result_sentence += ' '
+        result_words_list.append(cur_word)
         if cur_code == TokenEndIndex:
+            has_end_token = True
             break
     result_sentence = result_sentence.strip()
 
@@ -113,7 +120,13 @@ def create_image_caption(model, image_filename, resolution, sentence_max_len, To
     if output_folder is not None:
         target_filename = os.path.basename(image_filename)
         target_filename = os.path.join(output_folder, target_filename)
-        add_label_to_image(image_filename, target_filename, result_sentence)
+        result_words_list.pop(0)
+        if has_end_token:
+            result_words_list.pop()
+        if (len(result_words_list) > 0):
+            result_words_list[-1] += '.'
+            result_words_list[0] = result_words_list[0].title()
+        add_label_to_image(image_filename, target_filename, ' '.join(result_words_list), max_out_resolution)
 
 
 def find_token_index(id_to_word_dict, token):
@@ -121,7 +134,7 @@ def find_token_index(id_to_word_dict, token):
         if v == token:
             return k
     else:
-        raise "Didn't find required token"
+        raise Exception("Didn't find required token")
 
 
 def get_image_files(source_dir):
@@ -132,15 +145,15 @@ def get_image_files(source_dir):
 
 
 def create_caption_for_path(source_path, model, model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
-                            id_to_word_dict, output_folder):
+                            id_to_word_dict, output_folder, max_out_resolution):
     if os.path.isfile(source_path):
         create_image_caption(model, source_path, model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
-                             id_to_word_dict, output_folder)
+                             id_to_word_dict, output_folder, max_out_resolution)
     else:
         images_list = get_image_files(source_path)
         for cur_image_path in images_list:
             create_image_caption(model, cur_image_path, model_resolution, sentence_max_len, TokenBeginIndex,
-                                 TokenEndIndex, id_to_word_dict, output_folder)
+                                 TokenEndIndex, id_to_word_dict, output_folder, max_out_resolution)
 
 
 def perform_testing(settings, id_to_word_dict):
@@ -161,7 +174,8 @@ def perform_testing(settings, id_to_word_dict):
     model.load_weights(settings.weights_filename)
 
     create_caption_for_path(settings.test_source, model, image_shape[:2], sentence_max_len, TokenBeginIndex,
-                            TokenEndIndex, id_to_word_dict, settings.output_dir)
+                            TokenEndIndex, id_to_word_dict, settings.output_dir,
+                            (settings.out_max_width, settings.out_max_height))
 
 
 def main_func():
@@ -175,6 +189,10 @@ def main_func():
                         default='test_images_labeled')
     parser.add_argument('--test_source',
                         default='test_images')
+    parser.add_argument('--out_max_width',
+                        default=640, type=int)
+    parser.add_argument('--out_max_height',
+                        default=480, type=int)
 
     args = parser.parse_args()
 
