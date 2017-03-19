@@ -19,7 +19,7 @@ class MyModelCheckpoint(keras.callbacks.Callback):
             self.log_file.write('Epoch {0}\t Train {1}\n'.format(epoch, logs['loss']))
 
         if epoch % self.period == 0:
-            filename = '{}_{}_{:04}.hdf5'.format(self.path_begin, self.model_id, epoch)
+            filename = '{}_{:03}_{}.hdf5'.format(self.path_begin, epoch, self.model_id)
             self.model.save_weights(filename)
 
     def on_train_end(self, logs=None):
