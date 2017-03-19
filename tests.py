@@ -44,14 +44,16 @@ def fit_text_to_box(box_w, text, text_border, font):
 
 def add_label_to_image(src_file, target_file, text, max_out_resolution):
     margin = 10
-    font_size = 18
+    font_size = 20
+    text_line_border = 2
+
     with Image.open(src_file) as img:
         font = ImageFont.truetype("fonts/LibreBaskerville-Bold.ttf", font_size)
 
         if max_out_resolution is not None:
             img.thumbnail(max_out_resolution, Image.ANTIALIAS)
 
-        fit_text = fit_text_to_box(img.width - 2 * margin, text, 1, font)
+        fit_text = fit_text_to_box(img.width - 2 * margin, text, text_line_border, font)
 
         total_text_h = 0
         for text_line, text_line_box in fit_text:
