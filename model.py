@@ -24,7 +24,8 @@ from settings_keeper import SettingsKeeper
 from squeezenet.squeezenet import get_squeezenet
 
 
-def create_image_model(images_shape, repeat_count):
+def create_image_model_resnet50(images_shape, repeat_count):
+    print('Using ResNet50')
     inputs = Input(shape=images_shape)
 
     #    visual_model = VGG16(weights='imagenet', include_top = False, input_tensor = inputs)
@@ -37,6 +38,7 @@ def create_image_model(images_shape, repeat_count):
 
 
 def create_image_model_squeezenet(images_shape, repeat_count):
+    print('Using SqueezeNet')
     inputs = Input(shape=images_shape)
 
     visual_model = get_squeezenet(1000, dim_ordering='tf', include_top=False)
@@ -115,7 +117,7 @@ def create_optimizer(settings):
 
 def create_default_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
-    image_model = create_image_model(images_shape, sentence_len)
+    image_model = create_image_model_resnet50(images_shape, sentence_len)
 
     # outputs (None, sentence_len, 128)
     sentence_model = create_sentence_model(dict_size, sentence_len, pretrained_emb)
@@ -136,7 +138,7 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
 
 def create_GRUBIDIR_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
-    image_model = create_image_model(images_shape, sentence_len)
+    image_model = create_image_model_resnet50(images_shape, sentence_len)
 
     # outputs (None, sentence_len, 128)
     sentence_model = create_sentence_model_bidirectional(dict_size, sentence_len, pretrained_emb)
@@ -157,7 +159,7 @@ def create_GRUBIDIR_model(images_shape, dict_size, sentence_len, settings, pretr
 
 def create_GRU_2_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
-    image_model = create_image_model(images_shape, sentence_len)
+    image_model = create_image_model_resnet50(images_shape, sentence_len)
 
     # outputs (None, sentence_len, 128)
     sentence_model = create_sentence_model(dict_size, sentence_len, pretrained_emb)
@@ -187,8 +189,7 @@ def create_GRU_squeezenet_model(images_shape, dict_size, sentence_len, settings,
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-    combined_model.add(GRU(256, return_sequences=True, dropout_U=0.25, dropout_W=0.25))
-    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.25, dropout_W=0.25))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
@@ -202,7 +203,7 @@ def create_GRU_squeezenet_model(images_shape, dict_size, sentence_len, settings,
 
 def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
-    image_model = create_image_model(images_shape, sentence_len)
+    image_model = create_image_model_resnet50(images_shape, sentence_len)
 
     # outputs (None, sentence_len, 128)
     sentence_model = create_sentence_model(dict_size, sentence_len, pretrained_emb)
@@ -227,7 +228,7 @@ def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pret
 
 def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
-    image_model = create_image_model(images_shape, sentence_len)
+    image_model = create_image_model_resnet50(images_shape, sentence_len)
 
     # outputs (None, sentence_len, 128)
     sentence_model = create_sentence_model_lstm(dict_size, sentence_len, pretrained_emb)
