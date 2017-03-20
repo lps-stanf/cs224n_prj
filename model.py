@@ -12,6 +12,7 @@ from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
 from keras.applications.resnet50 import ResNet50
 from keras.applications.inception_v3 import InceptionV3
+from keras.applications.xception import Xception
 from keras.applications.resnet50 import ResNet50
 
 from keras.engine import Input
@@ -43,6 +44,18 @@ def create_image_model_squeezenet(images_shape, repeat_count):
 
     visual_model = get_squeezenet(1000, dim_ordering='tf', include_top=False)
     # visual_model.load_weights('squeezenet/model/squeezenet_weights_tf_dim_ordering_tf_kernels.h5')
+
+    x = visual_model(inputs)
+    x = GlobalMaxPooling2D()(x)
+    x = RepeatVector(repeat_count)(x)
+    return Model(inputs, x, 'image_model')
+
+
+def create_image_model_xception(images_shape, repeat_count):
+    print('Using Xception')
+    inputs = Input(shape=images_shape)
+
+    visual_model = Xception(weights='imagenet', include_top=False, input_tensor=inputs)
 
     x = visual_model(inputs)
     x = GlobalMaxPooling2D()(x)
@@ -226,11 +239,27 @@ def create_GRU_2_model(images_shape, dict_size, sentence_len, settings, pretrain
 
 
 def create_GRU_squeezenet_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
-    # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
-    # image_model = create_image_model(images_shape, sentence_len)
     image_model = create_image_model_squeezenet(images_shape, sentence_len)
 
-    # outputs (None, sentence_len, 128)
+    sentence_model = create_sentence_model(dict_size, sentence_len, pretrained_emb)
+
+    combined_model = Sequential()
+    combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
+
+    combined_model.add(Dense(dict_size))
+    combined_model.add(Activation('softmax'))
+
+    # input words are 1-indexed and 0 index is used for masking!
+    # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
+    return combined_model
+
+
+def create_GRU_xception_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+    image_model = create_image_model_xception(images_shape, sentence_len)
+
     sentence_model = create_sentence_model(dict_size, sentence_len, pretrained_emb)
 
     combined_model = Sequential()
@@ -312,6 +341,8 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'GRU_BIDIR': create_GRUBIDIR_model,
 
         'GRU_squeezenet': create_GRU_squeezenet_model,
+
+        'GRU_xception': create_GRU_xception_model,
 
         'GRU_1_03_glove': create_default_model,
 
