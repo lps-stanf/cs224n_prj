@@ -65,7 +65,7 @@ def create_image_model_xception(images_shape, repeat_count):
     return Model(inputs, x, 'image_model')
 
 
-def create_sentence_model(dict_size, sentence_len, pretrained_emb):
+def create_sentence_model(dict_size, sentence_len, pretrained_emb, gru_size = 128):
     sentence_model = Sequential()
 
     if pretrained_emb is not None:
@@ -78,8 +78,8 @@ def create_sentence_model(dict_size, sentence_len, pretrained_emb):
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
 
-    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.2, dropout_W=0.2))
-    sentence_model.add(TimeDistributed(Dense(128)))
+    sentence_model.add(GRU(output_dim=gru_size, return_sequences=True, dropout_U=0.2, dropout_W=0.2))
+    sentence_model.add(TimeDistributed(Dense(gru_size)))
 
     return sentence_model
 
@@ -197,7 +197,7 @@ def create_batchnorm_model(images_shape, dict_size, sentence_len, settings, pret
     return combined_model
 
 
-def create_GRUBIDIR_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+def create_GRU_BIDIR_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model_resnet50(images_shape, sentence_len)
 
@@ -216,8 +216,30 @@ def create_GRUBIDIR_model(images_shape, dict_size, sentence_len, settings, pretr
 
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
+	
+	
+def create_GRU_BIDIR_2_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+    # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
+    image_model = create_image_model_resnet50(images_shape, sentence_len)
 
+    # outputs (None, sentence_len, 128)
+    sentence_model = create_sentence_model_bidirectional(dict_size, sentence_len, pretrained_emb)
 
+    combined_model = Sequential()
+    combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
+    combined_model.add(Bidirectional(GRU(160, return_sequences=False, dropout_U=0.25, dropout_W=0.25),
+                                     merge_mode='concat'))
+
+    combined_model.add(Dense(dict_size))
+    combined_model.add(Activation('softmax'))
+
+    # input words are 1-indexed and 0 index is used for masking!
+    # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
+    return combined_model
+
+	
 def create_GRU_2_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model_resnet50(images_shape, sentence_len)
@@ -287,7 +309,7 @@ def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pret
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-    combined_model.add(GRU(256, return_sequences = True, dropout_U=0.25, dropout_W=0.25))
+    combined_model.add(GRU(160, return_sequences = True, dropout_U=0.25, dropout_W=0.25))
 
     combined_model2 = Sequential()
     combined_model2.add(Merge([image_model, combined_model], mode='concat', concat_axis=-1))
@@ -332,18 +354,20 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'LSTM_model': create_lstm_nadam_model,
 
         'GRU_batch_norm': create_batchnorm_model,
+		
         'GRU_1_05': create_default_model,
         'GRU_1_04': create_default_model,
         'GRU_1_03': create_default_model,
         'GRU_2_03': create_default_model,
         'GRU_5_03': create_default_model,
         'GRU_5_04': create_default_model,
+		
         'GRU_2': create_GRU_2_model,
         'GRU_stacked': create_GRU_stack_model,
-        'GRU_BIDIR': create_GRUBIDIR_model,
+        'GRU_BIDIR': create_GRU_BIDIR_model,
+		'GRU_BIDIR_2': create_GRU_BIDIR_2_model,
 
         'GRU_squeezenet': create_GRU_squeezenet_model,
-
         'GRU_xception': create_GRU_xception_model,
 
         'GRU_1_03_glove': create_default_model,

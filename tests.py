@@ -188,7 +188,7 @@ def main_func():
     parser.add_argument('--model',
                         default='default_model')
     parser.add_argument('--output_dir',
-                        default='test_images_labeled')
+                        default='test_images_captions')
     parser.add_argument('--test_source',
                         default='test_images')
     parser.add_argument('--out_max_width',
