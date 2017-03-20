@@ -34,7 +34,7 @@ def fire_module(x, fire_id, squeeze=16, expand=64, dim_ordering='tf'):
 
 # Original SqueezeNet from paper.
 
-def get_squeezenet(nb_classes, dim_ordering='tf'):
+def get_squeezenet(nb_classes, dim_ordering='tf', include_top=True):
     if dim_ordering is 'th':
         input_img = Input(shape=(3, 227, 227))
     elif dim_ordering is 'tf':
@@ -57,12 +57,16 @@ def get_squeezenet(nb_classes, dim_ordering='tf'):
     x = fire_module(x, fire_id=7, squeeze=48, expand=192, dim_ordering=dim_ordering)
     x = fire_module(x, fire_id=8, squeeze=64, expand=256, dim_ordering=dim_ordering)
     x = fire_module(x, fire_id=9, squeeze=64, expand=256, dim_ordering=dim_ordering)
+
     x = Dropout(0.5, name='drop9')(x)
 
-    x = Convolution2D(nb_classes, 1, 1, border_mode='valid', name='conv10')(x)
-    x = Activation('relu', name='relu_conv10')(x)
-    x = GlobalAveragePooling2D()(x)
-    out = Activation('softmax', name='loss')(x)
+    if include_top:
+        x = Convolution2D(nb_classes, 1, 1, border_mode='valid', name='conv10')(x)
+        x = Activation('relu', name='relu_conv10')(x)
+        x = GlobalAveragePooling2D()(x)
+        out = Activation('softmax', name='loss')(x)
+    else:
+        out = x
     model = Model(input=input_img, output=[out])
     return model
 
