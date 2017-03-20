@@ -34,6 +34,7 @@ def create_image_model_resnet50(images_shape, repeat_count):
     x = visual_model(inputs)
     x = GlobalMaxPooling2D()(x)
     x = RepeatVector(repeat_count)(x)
+
     return Model(inputs, x, 'image_model')
 
 
@@ -47,6 +48,7 @@ def create_image_model_squeezenet(images_shape, repeat_count):
     x = visual_model(inputs)
     x = GlobalMaxPooling2D()(x)
     x = RepeatVector(repeat_count)(x)
+    
     return Model(inputs, x, 'image_model')
 
 
@@ -82,7 +84,7 @@ def create_sentence_model_bn(dict_size, sentence_len, pretrained_emb):
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
 
-    sentence_model.add(GRU(output_dim=128, return_sequences=True))
+    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.2, dropout_W=0.2))
     sentence_model.add(BatchNormalization())
     sentence_model.add(TimeDistributed(Dense(128)))
     sentence_model.add(BatchNormalization())
@@ -133,7 +135,7 @@ def create_optimizer(settings):
     print('Creating optimizer: {0}'.format(settings.optimizer))
     if settings.optimizer == 'adam':
         return keras.optimizers.Adam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
-                                     epsilon=settings.epsilon, decay=settings.decay, clipnorm=5.0, clipvalue=4.0)
+                                     epsilon=settings.epsilon, decay=settings.decay)
     if settings.optimizer == 'nadam':
         return keras.optimizers.Nadam(lr=settings.learn_rate, beta_1=settings.beta_1, beta_2=settings.beta_2,
                                       epsilon=settings.epsilon, schedule_decay=settings.schedule_decay)
@@ -169,7 +171,7 @@ def create_batchnorm_model(images_shape, dict_size, sentence_len, settings, pret
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(BatchNormalization())
-    combined_model.add(GRU(256, return_sequences=False))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
     combined_model.add(BatchNormalization())
 
     combined_model.add(Dense(dict_size))
