@@ -1,4 +1,4 @@
-# CS224N Final project / Neural captioning
+# CS224N Final project / Tell me what I see
 
 
 * Viktor Makoviichuk / SUID 06086584 viktorm@stanford.edu
