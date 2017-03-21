@@ -1,12 +1,14 @@
 import argparse
 import json
 import os
+import random
 
 import h5py
 import numpy as np
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
+import tensorflow as tf
 
 from model import create_model
 from preprocess import preprocess_image
@@ -84,7 +86,7 @@ def add_label_to_image(src_file, target_file, text, max_out_resolution):
 
 
 def create_image_caption(model, image_filename, resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex,
-                         id_to_word_dict, output_folder=None, max_out_resolution=None):
+                         id_to_word_dict, output_folder=None, max_out_resolution=None, printResult=True):
     preprocessed_image = preprocess_image(image_filename, resolution)
     # adding 1 to the beginning of the image shape so that model can accept it (making batch with one element)
     preprocessed_image = np.expand_dims(preprocessed_image, axis=0)
@@ -117,18 +119,24 @@ def create_image_caption(model, image_filename, resolution, sentence_max_len, To
             break
     result_sentence = result_sentence.strip()
 
-    print('"{0}": "{1}"'.format(image_filename, result_sentence))
+    if printResult:
+        print('"{0}": "{1}"'.format(image_filename, result_sentence))
+
+    if len(result_words_list) > 0:
+        result_words_list.pop(0)
+        if has_end_token:
+            result_words_list.pop()
 
     if output_folder is not None:
         target_filename = os.path.basename(image_filename)
         target_filename = os.path.join(output_folder, target_filename)
-        result_words_list.pop(0)
-        if has_end_token:
-            result_words_list.pop()
-        if (len(result_words_list) > 0):
+
+        if len(result_words_list) > 0:
             result_words_list[-1] += '.'
             result_words_list[0] = result_words_list[0].title()
         add_label_to_image(image_filename, target_filename, ' '.join(result_words_list), max_out_resolution)
+
+    return result_words_list
 
 
 def find_token_index(id_to_word_dict, token):
@@ -158,7 +166,33 @@ def create_caption_for_path(source_path, model, model_resolution, sentence_max_l
                                  TokenEndIndex, id_to_word_dict, output_folder, max_out_resolution)
 
 
-def perform_testing(settings, id_to_word_dict):
+def calculate_metrics(settings, model, id_to_word_dict, captions_data, coco_images_dir, coco_num_images, coco_out_path,
+                      model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex):
+    images_data = captions_data['images']
+    images_count = len(images_data)
+    if coco_num_images >= images_count or coco_num_images <= 0:
+        image_indices = range(images_count)
+    else:
+        image_indices = random.sample(range(images_count), coco_num_images)
+
+    result_for_metrics = []
+    for img_ind in image_indices:
+        cur_image_path = os.path.join(coco_images_dir, images_data[img_ind]['file_name'])
+        image_id = images_data[img_ind]['id']
+        caption_prediction = create_image_caption(model, cur_image_path, model_resolution, sentence_max_len,
+                                                  TokenBeginIndex, TokenEndIndex, id_to_word_dict, printResult=False)
+        result_for_metrics.append({'image_id': image_id, 'caption': ' '.join(caption_prediction)})
+
+    weight_filename = os.path.basename(settings.weights_filename)
+    weight_filename = os.path.splitext(weight_filename)
+    weight_filename = weight_filename[0]
+
+    with open(os.path.join(coco_out_path, '{0}.pred'.format(weight_filename)), 'w') as out_file:
+        json.dump(result_for_metrics, out_file)
+
+
+def perform_testing(settings, id_to_word_dict, captions_data=None, coco_images_dir=None, coco_num_images=None,
+                    coco_out_path=None):
     from preprocess import TokenBegin, TokenEnd
 
     with h5py.File(settings.preprocessed_images_file, 'r') as h5_images_file:
@@ -175,9 +209,14 @@ def perform_testing(settings, id_to_word_dict):
     model = create_model(image_shape, dict_size, sentence_max_len, settings)
     model.load_weights(settings.weights_filename)
 
-    create_caption_for_path(settings.test_source, model, image_shape[:2], sentence_max_len, TokenBeginIndex,
-                            TokenEndIndex, id_to_word_dict, settings.output_dir,
-                            (settings.out_max_width, settings.out_max_height))
+    if captions_data is not None and coco_images_dir is not None and coco_num_images is not None \
+            and coco_out_path is not None:
+        calculate_metrics(settings, model, id_to_word_dict, captions_data, coco_images_dir, coco_num_images,
+                          coco_out_path, image_shape[:2], sentence_max_len, TokenBeginIndex, TokenEndIndex)
+    else:
+        create_caption_for_path(settings.test_source, model, image_shape[:2], sentence_max_len, TokenBeginIndex,
+                                TokenEndIndex, id_to_word_dict, settings.output_dir,
+                                (settings.out_max_width, settings.out_max_height))
 
 
 def main_func():
@@ -196,6 +235,15 @@ def main_func():
     parser.add_argument('--out_max_height',
                         default=480, type=int)
 
+    # param to switch to the metric generation
+    parser.add_argument('--coco_params', nargs=4,
+                        help='the first argument for parameter is the path to the COCO captions file\n'
+                             'the second param is the path to corresponding COCO images folder\n'
+                             'the third param is the num of images we use (if it is <= 0 then all images will be used)\n'
+                             'the forth param is the output_folder\n'
+                             'example: --coco_params data/annotations/captions_val2014.json data/val2014 1000 output_test'
+                        )
+
     args = parser.parse_args()
 
     settings_ini_section_list = ['tests', args.model]
@@ -205,13 +253,28 @@ def main_func():
         settings.add_ini_file('user_settings.ini', settings_ini_section_list, False)
     settings.add_parsed_arguments(args)
 
+    random.seed(settings.seed)
+    np.random.seed(settings.seed)
+    tf.set_random_seed(settings.seed)
+
     if settings.cuda_devices is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = settings.cuda_devices
 
     with open(settings.id_to_word_file, 'r') as f:
         id_to_word_dict = json.load(f)
         id_to_word_dict = {int(k): v for k, v in id_to_word_dict.items()}
-        perform_testing(settings, id_to_word_dict)
+        if args.coco_params is not None:
+            captions_file, coco_images_dir, coco_num_images, coco_out_path = args.coco_params
+            coco_num_images = int(coco_num_images)
+            with open(captions_file, 'r') as cap_f:
+                captions_data = json.load(cap_f)
+        else:
+            captions_data = None
+            coco_images_dir = None
+            coco_num_images = None
+            coco_out_path = None
+
+        perform_testing(settings, id_to_word_dict, captions_data, coco_images_dir, coco_num_images, coco_out_path)
 
 
 if __name__ == '__main__':
