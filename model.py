@@ -21,7 +21,7 @@ from keras.layers import GlobalMaxPooling2D, GRU, LSTM, Dense, Activation, Embed
 from keras.layers.normalization import BatchNormalization
 from keras.models import Sequential, Merge, Model
 
-from model_checkpoints import MyModelCheckpoint
+from model_checkpoints import MyModelCheckpoint, BestModelCheckpoint
 from settings_keeper import SettingsKeeper
 from squeezenet.squeezenet import get_squeezenet
 
@@ -97,10 +97,11 @@ def create_sentence_model_bn(dict_size, sentence_len, pretrained_emb):
         # + 1 to respect masking
         sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
 
-    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.2, dropout_W=0.2))
+    sentence_model.add(BatchNormalization())
+    sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.0, dropout_W=0.0))
     sentence_model.add(BatchNormalization())
     sentence_model.add(TimeDistributed(Dense(128)))
-    sentence_model.add(BatchNormalization())
+#    sentence_model.add(BatchNormalization())
 
     return sentence_model
 
@@ -205,7 +206,7 @@ def create_batchnorm_model(images_shape, dict_size, sentence_len, settings, pret
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(BatchNormalization())
-    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.0, dropout_W=0.0))
     combined_model.add(BatchNormalization())
 
     combined_model.add(Dense(dict_size))
@@ -460,7 +461,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
 
     tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
                                      write_graph=True)
-    cp = MyModelCheckpoint(settings.model_output_dir, "w", settings.weight_save_epoch_period,
+    cp = BestModelCheckpoint(settings.model_output_dir, "w", settings.weight_save_epoch_period,
                            model_id=settings.model_id)
 
     # Initialize train generator
@@ -481,7 +482,7 @@ def main_func():
                         default='{0:%y_%m_%d_%H_%M_%S}'.format(datetime.datetime.now()), type=str)
     parser.add_argument('--cuda_devices',
                         default=None)
-    parser.add_argument('--start_weights_path',
+    parser.add_argument('--weights_filename',
                         default=None)
     parser.add_argument('--model',
                         default='default_model')
