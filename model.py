@@ -461,7 +461,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
 
     tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
                                      write_graph=True)
-    cp = BestModelCheckpoint(settings.model_output_dir, "w", settings.weight_save_epoch_period,
+    cp = BestModelCheckpoint(settings.model_output_dir, settings.model, settings.weight_save_epoch_period,
                            model_id=settings.model_id)
 
     # Initialize train generator
@@ -504,7 +504,7 @@ def main_func():
     tf.set_random_seed(settings.seed)
 
     # Adding model name to the beginning of the result files
-    settings.model_id = '{0}_{1}'.format(settings.model, settings.model_id)
+    # settings.model_id = '{0}_{1}'.format(settings.model, settings.model_id)
 
     # Train data
     id_to_word_train = os.path.join(settings.preprocessed_train, 'id_to_word.json')
