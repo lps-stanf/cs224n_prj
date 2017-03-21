@@ -455,9 +455,9 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     image_shape = images_train.shape[1:]
 
     model = create_model(image_shape, dict_size_train, sentence_len, settings)
-    if settings.start_weights_path is not None:
-        model.load_weights(settings.start_weights_path)
-        print('Using start weights: "{}"'.format(settings.start_weights_path))
+    if settings.weights_filename is not None:
+        model.load_weights(settings.weights_filename)
+        print('Using start weights: "{}"'.format(settings.weights_filename))
 
     tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
                                      write_graph=True)
