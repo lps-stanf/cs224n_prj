@@ -36,29 +36,24 @@ class BestModelCheckpoint(keras.callbacks.Callback):
 
         self.out_dir = os.path.join(dir, model_name)
         if not os.path.isdir(self.out_dir):
-            os.makedirs(self.out_dir)
-
+             os.makedirs(self.out_dir)
+        
         self.log_file = open(os.path.join(dir, '{}__{}.log'.format(self.model_name, self.model_id)), 'w')
 
     def on_epoch_end(self, epoch, logs=None):
         # we want 1-indexed epoch in output
         epoch += 1
         if 'val_loss' in logs:
-            if (epoch > self.period) and (logs['val_loss'] < self.best_loss):
+            if logs['val_loss'] < self.best_loss:
                 self.best_loss = logs['val_loss']
                 self.best_epoch = epoch
-<<<<<<< HEAD
+                print('\nA new best result! Val loss = {}\n'.format(logs['val_loss']))
                 if epoch > self.period:
                     self.log_file.write('New best result achieved!\n')
-                    print('\nNew best result achieved! Val loss = {}\n'.format(logs['val_loss']))
-                    filename = 'best_{}_{:03}.hdf5'.format(self.model_id, epoch)
+                    filename = os.path.join(self.out_dir,
+                                            'best_{}__{:03}__{}.hdf5'.format(self.model_name, epoch, self.model_id))
+                    print('Saving weights\n')
                     self.model.save_weights(filename)
-=======
-                self.log_file.write('New best result achieved!\n')
-                filename = os.path.join(self.out_dir,
-                                        'best_{}__{:03}__{}.hdf5'.format(self.model_name, epoch, self.model_id))
-                self.model.save_weights(filename)
->>>>>>> 0c5f6e17b76997b1bab0eec9e4f57c03db512a7f
             self.log_file.write('Epoch {0}\tTrain {1}\t Val {2}\n'.format(epoch, logs['loss'], logs['val_loss']))
 
         else:
