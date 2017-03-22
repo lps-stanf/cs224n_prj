@@ -83,6 +83,24 @@ def create_sentence_model(dict_size, sentence_len, pretrained_emb, gru_size = 12
 
     return sentence_model
 
+def create_sentence_model2(dict_size, sentence_len, pretrained_emb, gru_size = 128):
+    sentence_model = Sequential()
+
+    if pretrained_emb is not None:
+        # read initial matrix
+        word_dim = pretrained_emb.shape[0]
+        embed_dim = pretrained_emb.shape[1]
+        sentence_model.add(Embedding(word_dim, embed_dim, input_length=sentence_len, mask_zero=True,
+                                     weights=[pretrained_emb]))
+    else:
+        # + 1 to respect masking
+        sentence_model.add(Embedding(dict_size + 1, 512, input_length=sentence_len, mask_zero=True))
+
+    sentence_model.add(GRU(output_dim=gru_size, return_sequences=True, dropout_U=0.2, dropout_W=0.2))
+    sentence_model.add(GRU(output_dim=gru_size, return_sequences=True, dropout_U=0.2, dropout_W=0.2))
+    sentence_model.add(TimeDistributed(Dense(gru_size)))
+
+    return sentence_model
 
 def create_sentence_model_bn(dict_size, sentence_len, pretrained_emb):
     sentence_model = Sequential()
@@ -185,6 +203,26 @@ def create_GRU_large_model(images_shape, dict_size, sentence_len, settings, pret
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(GRU(320, return_sequences=False, dropout_U=0.25, dropout_W=0.25))
+
+    combined_model.add(Dense(dict_size))
+    combined_model.add(Activation('softmax'))
+
+    # input words are 1-indexed and 0 index is used for masking!
+    # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
+
+    combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
+    return combined_model
+
+def create_GRU_deep_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
+    # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
+    image_model = create_image_model_resnet50(images_shape, sentence_len)
+
+    # outputs (None, sentence_len, 128)
+    sentence_model = create_sentence_model2(dict_size, sentence_len, pretrained_emb)
+
+    combined_model = Sequential()
+    combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
+    combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
 
     combined_model.add(Dense(dict_size))
     combined_model.add(Activation('softmax'))
@@ -383,7 +421,8 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'GRU_2_03': create_default_model,
         'GRU_5_03': create_default_model,
         'GRU_5_04': create_default_model,
-		
+
+		'GRU_DEEP': create_GRU_deep_model,
 		'GRU_LARGE': create_GRU_large_model,
 		
         'GRU_2': create_GRU_2_model,
