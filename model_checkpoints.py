@@ -42,9 +42,11 @@ class BestModelCheckpoint(keras.callbacks.Callback):
             if (epoch > self.period) and (logs['val_loss'] < self.best_loss):
                 self.best_loss = logs['val_loss']
                 self.best_epoch = epoch
-                self.log_file.write('New best result achieved!\n')
-                filename = 'best_{}_{:03}.hdf5'.format(self.model_id, epoch)
-                self.model.save_weights(filename)
+                if epoch > self.period:
+                    self.log_file.write('New best result achieved!\n')
+                    print('\nNew best result achieved! Val loss = {}\n'.format(logs['val_loss']))
+                    filename = 'best_{}_{:03}.hdf5'.format(self.model_id, epoch)
+                    self.model.save_weights(filename)
             self.log_file.write('Epoch {0}\tTrain {1}\t Val {2}\n'.format(epoch, logs['loss'], logs['val_loss']))
 
         else:
