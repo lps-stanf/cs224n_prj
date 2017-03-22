@@ -494,13 +494,13 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     image_shape = images_train.shape[1:]
 
     model = create_model(image_shape, dict_size_train, sentence_len, settings)
-    if settings.start_weights_path is not None:
-        model.load_weights(settings.start_weights_path)
-        print('Using start weights: "{}"'.format(settings.start_weights_path))
+    if settings.weights_filename is not None:
+        model.load_weights(settings.weights_filename)
+        print('Using start weights: "{}"'.format(settings.weights_filename))
 
     tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
                                      write_graph=True)
-    cp = BestModelCheckpoint(settings.model_output_dir, "w", settings.weight_save_epoch_period,
+    cp = BestModelCheckpoint(settings.model_output_dir, settings.model, settings.weight_save_epoch_period,
                            model_id=settings.model_id)
 
     # Initialize train generator
@@ -543,7 +543,7 @@ def main_func():
     tf.set_random_seed(settings.seed)
 
     # Adding model name to the beginning of the result files
-    settings.model_id = '{0}_{1}'.format(settings.model, settings.model_id)
+    # settings.model_id = '{0}_{1}'.format(settings.model, settings.model_id)
 
     # Train data
     id_to_word_train = os.path.join(settings.preprocessed_train, 'id_to_word.json')
