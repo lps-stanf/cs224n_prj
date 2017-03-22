@@ -1,10 +1,15 @@
 import argparse
+import datetime
 import json
 import os
 import random
+import threading
+from queue import Queue, Empty
 
 import h5py
+import multiprocessing
 import numpy as np
+import time
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
@@ -166,6 +171,133 @@ def create_caption_for_path(source_path, model, model_resolution, sentence_max_l
                                  TokenEndIndex, id_to_word_dict, output_folder, max_out_resolution)
 
 
+def printWithTimestamp(out_str):
+    timestamp = '{:%H:%M:%S}'.format(datetime.datetime.now())
+    print('{} -> {}'.format(timestamp, out_str))
+
+
+def batched_create_captions(settings, model, images_data, image_indices, model_resolution, coco_images_dir,
+                            sentence_max_len, TokenBeginIndex, TokenEndIndex):
+    num_loader_threads = multiprocessing.cpu_count()
+    num_loader_threads = max(1, num_loader_threads - 1)
+
+    loading_queue = Queue()
+    loaded_img_queue = Queue()
+    processing_queue = Queue()
+    for img_ind in image_indices:
+        processing_queue.put(img_ind)
+
+    num_total_images = len(image_indices)
+
+    def loading_worker():
+        while True:
+            try:
+                cur_img_ind = loading_queue.get(block=False)
+            except Empty:
+                if not processing_queue.empty():
+                    time.sleep(0.1)
+                    continue
+                else:
+                    break
+
+            cur_image_path = os.path.join(coco_images_dir, images_data[cur_img_ind]['file_name'])
+            preprocessed_img = preprocess_image(cur_image_path, model_resolution)
+            loaded_img_queue.put((cur_img_ind, preprocessed_img))
+
+            # print('thread: {}; loaded: {}'.format(threading.current_thread().name, cur_image_path))
+            loading_queue.task_done()
+
+        # print('Loader thread "{}" ended'.format(threading.current_thread().name))
+
+    for worker_index in range(num_loader_threads):
+        t = threading.Thread(target=loading_worker)
+        t.start()
+
+    results = []
+    num_processed_images = 0
+    max_images_in_batch = settings.coco_batch_size
+    image_shape = model_resolution + (3,)
+    batch_shape = (max_images_in_batch,) + image_shape
+    batch_images = np.zeros(batch_shape, dtype=np.float32)
+    batch_sentences = np.zeros((max_images_in_batch, sentence_max_len), dtype=np.int32)
+    batch_sentences_lengths = [0] * max_images_in_batch
+    batch_images_indices = [0] * max_images_in_batch
+    num_requested_images = 0
+    batch_free_indices = list(range(max_images_in_batch))
+    batch_work_indices = []
+    printWithTimestamp('Started images processing...')
+    while num_processed_images < num_total_images:
+
+        while num_requested_images > 0:
+            try:
+                loaded_image_index, loaded_image_data = loaded_img_queue.get(block=False)
+                num_requested_images -= 1
+                new_work_index = batch_free_indices.pop()
+
+                batch_work_indices.append(new_work_index)
+
+                batch_images[new_work_index] = loaded_image_data
+
+                batch_sentences[new_work_index] = np.zeros((sentence_max_len,), dtype=np.int32)
+                batch_sentences[new_work_index, 0] = TokenBeginIndex
+                batch_sentences_lengths[new_work_index] = 1
+
+                batch_images_indices[new_work_index] = loaded_image_index
+            except Empty:
+                break
+
+        images_to_request = max_images_in_batch - (len(batch_work_indices) + num_requested_images)
+        while not processing_queue.empty() and images_to_request > 0:
+            loading_queue.put(processing_queue.get(block=False))
+            num_requested_images += 1
+            processing_queue.task_done()
+            images_to_request -= 1
+
+        if len(batch_work_indices) > 0:
+            next_words = model.predict([batch_images, batch_sentences])
+            next_words = np.argmax(next_words, axis=1)
+            # making the words 1-indexed as in dictionary
+            next_words += 1
+            cur_batch_work_indices = batch_work_indices
+            for work_ind in cur_batch_work_indices:
+                cur_next_word = next_words[work_ind]
+                cur_sent_len = batch_sentences_lengths[work_ind]
+                batch_sentences[work_ind, cur_sent_len] = cur_next_word
+                cur_sent_len += 1
+                batch_sentences_lengths[work_ind] = cur_sent_len
+                if cur_next_word == TokenEndIndex or cur_sent_len >= sentence_max_len:
+                    batch_work_indices.remove(work_ind)
+                    batch_free_indices.append(work_ind)
+                    results.append((batch_images_indices[work_ind], batch_sentences[work_ind, :cur_sent_len]
+                                    , cur_sent_len))
+                    num_processed_images += 1
+                    if num_processed_images % 1000 == 0:
+                        printWithTimestamp('Processed {}/{} images.'.format(num_processed_images, num_total_images))
+        else:
+            time.sleep(0.1)
+
+    printWithTimestamp('Done!')
+    return results
+
+
+def process_batched_results(batched_results, id_to_word_dict, TokenEndIndex):
+    result = []
+    printWithTimestamp('Converting results into required format...')
+    for batched_result in batched_results:
+        br_img_id, br_sent, br_sent_len = batched_result
+        if br_sent_len <= 0:
+            printWithTimestamp('Error: Zero-length string while processing image "{}"'.format(br_img_id))
+            continue
+        caption = br_sent.tolist()
+        caption.pop(0)
+        if caption[-1] == TokenEndIndex:
+            caption.pop()
+        caption = [id_to_word_dict[word_id] for word_id in caption]
+        result.append({'image_id': br_img_id, 'caption': ' '.join(caption)})
+    printWithTimestamp('Convertation ended.')
+    return result
+
+
 def calculate_metrics(settings, model, id_to_word_dict, captions_data, coco_images_dir, coco_num_images, coco_out_path,
                       model_resolution, sentence_max_len, TokenBeginIndex, TokenEndIndex):
     images_data = captions_data['images']
@@ -175,13 +307,19 @@ def calculate_metrics(settings, model, id_to_word_dict, captions_data, coco_imag
     else:
         image_indices = random.sample(range(images_count), coco_num_images)
 
-    result_for_metrics = []
-    for img_ind in image_indices:
-        cur_image_path = os.path.join(coco_images_dir, images_data[img_ind]['file_name'])
-        image_id = images_data[img_ind]['id']
-        caption_prediction = create_image_caption(model, cur_image_path, model_resolution, sentence_max_len,
-                                                  TokenBeginIndex, TokenEndIndex, id_to_word_dict, printResult=False)
-        result_for_metrics.append({'image_id': image_id, 'caption': ' '.join(caption_prediction)})
+    if not settings.coco_batching:
+        result_for_metrics = []
+        for img_ind in image_indices:
+            cur_image_path = os.path.join(coco_images_dir, images_data[img_ind]['file_name'])
+            image_id = images_data[img_ind]['id']
+            caption_prediction = create_image_caption(model, cur_image_path, model_resolution, sentence_max_len,
+                                                      TokenBeginIndex, TokenEndIndex, id_to_word_dict,
+                                                      printResult=False)
+            result_for_metrics.append({'image_id': image_id, 'caption': ' '.join(caption_prediction)})
+    else:
+        result_for_metrics = batched_create_captions(settings, model, images_data, image_indices, model_resolution,
+                                                     coco_images_dir, sentence_max_len, TokenBeginIndex, TokenEndIndex)
+        result_for_metrics = process_batched_results(result_for_metrics, id_to_word_dict, TokenEndIndex)
 
     weight_filename = os.path.basename(settings.weights_filename)
     weight_filename = os.path.splitext(weight_filename)
@@ -243,6 +381,10 @@ def main_func():
                              'the forth param is the output_folder\n'
                              'example: --coco_params data/annotations/captions_val2014.json data/val2014 1000 output_test'
                         )
+    parser.add_argument('--coco_batching', type=bool,
+                        default=True)
+    parser.add_argument('--coco_batch_size', type=int,
+                        default=50)
 
     args = parser.parse_args()
 
