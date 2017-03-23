@@ -49,7 +49,7 @@ def create_image_model_squeezenet(images_shape, repeat_count):
     x = visual_model(inputs)
     x = GlobalMaxPooling2D()(x)
     x = RepeatVector(repeat_count)(x)
-    
+
     return Model(inputs, x, 'image_model')
 
 
@@ -65,7 +65,7 @@ def create_image_model_xception(images_shape, repeat_count):
     return Model(inputs, x, 'image_model')
 
 
-def create_sentence_model(dict_size, sentence_len, pretrained_emb, gru_size = 128):
+def create_sentence_model(dict_size, sentence_len, pretrained_emb, gru_size=128):
     sentence_model = Sequential()
 
     if pretrained_emb is not None:
@@ -83,7 +83,8 @@ def create_sentence_model(dict_size, sentence_len, pretrained_emb, gru_size = 12
 
     return sentence_model
 
-def create_sentence_model2(dict_size, sentence_len, pretrained_emb, gru_size = 128):
+
+def create_sentence_model2(dict_size, sentence_len, pretrained_emb, gru_size=128):
     sentence_model = Sequential()
 
     if pretrained_emb is not None:
@@ -101,6 +102,7 @@ def create_sentence_model2(dict_size, sentence_len, pretrained_emb, gru_size = 1
     sentence_model.add(TimeDistributed(Dense(gru_size)))
 
     return sentence_model
+
 
 def create_sentence_model_bn(dict_size, sentence_len, pretrained_emb):
     sentence_model = Sequential()
@@ -119,7 +121,7 @@ def create_sentence_model_bn(dict_size, sentence_len, pretrained_emb):
     sentence_model.add(GRU(output_dim=128, return_sequences=True, dropout_U=0.0, dropout_W=0.0))
     sentence_model.add(BatchNormalization())
     sentence_model.add(TimeDistributed(Dense(128)))
-#    sentence_model.add(BatchNormalization())
+    #    sentence_model.add(BatchNormalization())
 
     return sentence_model
 
@@ -173,6 +175,26 @@ def create_optimizer(settings):
                                       epsilon=settings.epsilon, schedule_decay=settings.schedule_decay)
 
 
+def create_glorot_int_matrix(shape):
+    sum_dims = np.sum(shape)
+    e = np.sqrt(6.0 / sum_dims)
+    return np.random.uniform(-e, e, shape)
+
+
+def addPredictionLayers(model, dict_size, settings):
+    if settings.token_freq is not None:
+        # skipping 0 index as it is used for masking
+        bias_init = np.array([1.0 * cur_freq for cur_freq in settings.token_freq[1:]])
+        bias_init /= np.sum(bias_init)
+        bias_init = np.log(bias_init)
+        bias_init -= np.max(bias_init)
+        matrix_init = create_glorot_int_matrix((model.output_shape[1], dict_size))
+        model.add(Dense(dict_size, weights=[matrix_init, bias_init]))
+    else:
+        model.add(Dense(dict_size))
+    model.add(Activation('softmax'))
+
+
 def create_default_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model_resnet50(images_shape, sentence_len)
@@ -184,15 +206,15 @@ def create_default_model(images_shape, dict_size, sentence_len, settings, pretra
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
-	
+
+
 def create_GRU_large_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model_resnet50(images_shape, sentence_len)
@@ -204,14 +226,14 @@ def create_GRU_large_model(images_shape, dict_size, sentence_len, settings, pret
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(GRU(320, return_sequences=False, dropout_U=0.25, dropout_W=0.25))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
+
 
 def create_GRU_deep_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
@@ -224,15 +246,14 @@ def create_GRU_deep_model(images_shape, dict_size, sentence_len, settings, pretr
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
-	
+
 
 def create_batchnorm_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
@@ -247,8 +268,7 @@ def create_batchnorm_model(images_shape, dict_size, sentence_len, settings, pret
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.0, dropout_W=0.0))
     combined_model.add(BatchNormalization())
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
@@ -268,16 +288,15 @@ def create_GRU_BIDIR_model(images_shape, dict_size, sentence_len, settings, pret
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
 
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
-	
-	
+
+
 def create_GRU_BIDIR_2_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model_resnet50(images_shape, sentence_len)
@@ -290,8 +309,7 @@ def create_GRU_BIDIR_2_model(images_shape, dict_size, sentence_len, settings, pr
     combined_model.add(Bidirectional(GRU(160, return_sequences=False, dropout_U=0.25, dropout_W=0.25),
                                      merge_mode='concat'))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
@@ -299,7 +317,7 @@ def create_GRU_BIDIR_2_model(images_shape, dict_size, sentence_len, settings, pr
     combined_model.compile(loss='sparse_categorical_crossentropy', optimizer=create_optimizer(settings))
     return combined_model
 
-	
+
 def create_GRU_2_model(images_shape, dict_size, sentence_len, settings, pretrained_emb):
     # input (None, 224, 224, 3), outputs (None, sentence_len, 512)
     image_model = create_image_model_resnet50(images_shape, sentence_len)
@@ -312,8 +330,7 @@ def create_GRU_2_model(images_shape, dict_size, sentence_len, settings, pretrain
     combined_model.add(GRU(256, return_sequences=True, dropout_U=0.25, dropout_W=0.25))
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.25, dropout_W=0.25))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
@@ -331,8 +348,7 @@ def create_GRU_squeezenet_model(images_shape, dict_size, sentence_len, settings,
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
@@ -350,8 +366,7 @@ def create_GRU_xception_model(images_shape, dict_size, sentence_len, settings, p
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
     combined_model.add(GRU(256, return_sequences=False, dropout_U=0.2, dropout_W=0.2))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
@@ -369,14 +384,13 @@ def create_GRU_stack_model(images_shape, dict_size, sentence_len, settings, pret
 
     combined_model = Sequential()
     combined_model.add(Merge([image_model, sentence_model], mode='concat', concat_axis=-1))
-    combined_model.add(GRU(160, return_sequences = True, dropout_U=0.25, dropout_W=0.25))
+    combined_model.add(GRU(160, return_sequences=True, dropout_U=0.25, dropout_W=0.25))
 
     combined_model2 = Sequential()
     combined_model2.add(Merge([image_model, combined_model], mode='concat', concat_axis=-1))
-    combined_model2.add(GRU(256, return_sequences = False, dropout_U=0.25, dropout_W=0.25))
+    combined_model2.add(GRU(256, return_sequences=False, dropout_U=0.25, dropout_W=0.25))
 
-    combined_model2.add(Dense(dict_size))
-    combined_model2.add(Activation('softmax'))
+    addPredictionLayers(combined_model2, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
@@ -398,8 +412,7 @@ def create_lstm_nadam_model(images_shape, dict_size, sentence_len, settings, pre
     combined_model.add(LSTM(256, return_sequences=False, dropout_U=0.1, dropout_W=0.2))
     #    combined_model.add(LSTM(256, return_sequences=False))
 
-    combined_model.add(Dense(dict_size))
-    combined_model.add(Activation('softmax'))
+    addPredictionLayers(combined_model, dict_size, settings)
 
     # input words are 1-indexed and 0 index is used for masking!
     # but result words are 0-indexed and will go into [0, ..., dict_size-1] !!!
@@ -414,7 +427,7 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'LSTM_model': create_lstm_nadam_model,
 
         'GRU_batch_norm': create_batchnorm_model,
-		
+
         'GRU_1_05': create_default_model,
         'GRU_1_04': create_default_model,
         'GRU_1_03': create_default_model,
@@ -422,13 +435,13 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'GRU_5_03': create_default_model,
         'GRU_5_04': create_default_model,
 
-		'GRU_DEEP': create_GRU_deep_model,
-		'GRU_LARGE': create_GRU_large_model,
-		
+        'GRU_DEEP': create_GRU_deep_model,
+        'GRU_LARGE': create_GRU_large_model,
+
         'GRU_2': create_GRU_2_model,
         'GRU_stacked': create_GRU_stack_model,
         'GRU_BIDIR': create_GRU_BIDIR_model,
-		'GRU_BIDIR_2': create_GRU_BIDIR_2_model,
+        'GRU_BIDIR_2': create_GRU_BIDIR_2_model,
 
         'GRU_squeezenet': create_GRU_squeezenet_model,
         'GRU_xception': create_GRU_xception_model,
@@ -439,7 +452,6 @@ def create_model(images_shape, dict_size, sentence_len, settings):
     }
 
     print('Using model "{0}"'.format(settings.model))
-
 
     # Pretrained embeddings
     if settings.pretrained_word_vectors_file:
@@ -501,7 +513,7 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
                                      write_graph=True)
     cp = BestModelCheckpoint(settings.model_output_dir, settings.model, settings.weight_save_epoch_period,
-                           model_id=settings.model_id)
+                             model_id=settings.model_id)
 
     # Initialize train generator
     train_stream = prepare_batch(sentences_train, sentences_next_train, sent_to_img_train, images_train,
@@ -552,6 +564,21 @@ def main_func():
 
     preprocessed_images_train = os.path.join(settings.preprocessed_train, 'preprocessed_images.h5')
     preprocessed_text_train = os.path.join(settings.preprocessed_train, 'preprocessed_text.h5')
+
+    preprocessed_token_freq_path = os.path.join(settings.preprocessed_train, 'id_to_freq.json')
+    if os.path.exists(preprocessed_token_freq_path):
+        with open(preprocessed_token_freq_path, 'r') as f:
+            loaded_preprocessed_token_freq = json.load(f)
+            token_freq_total = dict_size_train + 1
+
+            preprocessed_token_freq = [0]
+            for ind in range(1, token_freq_total):
+                token_freq = loaded_preprocessed_token_freq.get(str(ind), 0)
+                assert (token_freq > 0)
+                preprocessed_token_freq.append(token_freq)
+    else:
+        preprocessed_token_freq = None
+    settings.add_key_value('token_freq', preprocessed_token_freq)
 
     # Val data
     if settings.preprocessed_val is not None:

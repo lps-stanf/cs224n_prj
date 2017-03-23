@@ -24,14 +24,14 @@ class SettingsKeeper(object):
         for k, v in dict.items():
             self._settings_dict[k] = v
 
-    def _add_key_value(self, key, val, type=None):
+    def add_key_value(self, key, val, type=None):
         if type is not None:
             val = type(val)
         self._settings_dict[key] = val
 
     def add_key_from_dict(self, dict, key, type=None, default=None):
         val = dict.get(key, default)
-        self._add_key_value(key, val, type)
+        self.add_key_value(key, val, type)
 
     def _add_ini_file_section(self, config_parser, section_name, require_provided_section=True):
         sections_list = config_parser.sections()
@@ -49,7 +49,7 @@ class SettingsKeeper(object):
             if len(option_key_list) == 2:
                 type = locate(option_key_list[0])
                 option_key_list.pop(0)
-            self._add_key_value(option_key_list[0], option_value, type)
+            self.add_key_value(option_key_list[0], option_value, type)
 
     def add_ini_file(self, ini_file_path, sections_list=None, require_provided_sections=True):
         config_parser = ConfigParser(allow_no_value=True)
@@ -65,4 +65,4 @@ class SettingsKeeper(object):
 
     def add_parsed_arguments(self, args: argparse.Namespace):
         for prop, val in vars(args).items():
-            self._add_key_value(prop, val)
+            self.add_key_value(prop, val)
