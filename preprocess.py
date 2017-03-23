@@ -99,28 +99,33 @@ def build_vocab_to_id(vocab):
     return word_to_id, id_to_word
 
 
-def encode_sentence(sent, word_to_id, max_sentence_len):
+def encode_sentence(sent, word_to_id, max_sentence_len, word_counter):
     result = []
     for word in sent:
         if word in word_to_id:
-            result.append(word_to_id[word])
+            cur_word = word
         else:
-            result.append(word_to_id[TokenUnk])
+            cur_word = TokenUnk
+        result.append(word_to_id[cur_word])
+        word_counter[cur_word] += 1
 
     delta = max_sentence_len - len(result)
     assert delta >= 0
 
     # adding zeroes at the end for masking in the model
     result = [word_to_id[TokenBegin]] + result + [word_to_id[TokenEnd]] + [0] * delta
+
+    word_counter.update([TokenBegin, TokenEnd])
+
     return len(sent) + 2, result
 
 
-def encode_images_captions(data, word_to_id, max_sentence_len):
+def encode_images_captions(data, word_to_id, max_sentence_len, word_counter):
     result = []
     for _, img_info in data.items():
         partial_sentences = []
         for cur_sentence in img_info['captions']:
-            encoded_len, encoded_sent = encode_sentence(cur_sentence, word_to_id, max_sentence_len)
+            encoded_len, encoded_sent = encode_sentence(cur_sentence, word_to_id, max_sentence_len, word_counter)
             # generating all partial sentences and corresponding next words that we can use for prediction
             # the last sentence is the [<Begin>]
             while encoded_len > 1:
@@ -239,7 +244,21 @@ def preprocess(settings):
         with open(os.path.join(settings.output_dir, 'id_to_word.json'), 'w') as f:
             json.dump(id_to_word, f)
 
-    encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, settings.max_sentence_length)
+    word_counter = Counter()
+    encoded_images_info = encode_images_captions(filtered_images_info, word_to_id, settings.max_sentence_length,
+                                                 word_counter)
+
+    if not use_train_data:
+        assert(len(word_counter) == len(id_to_word))
+        top_words = word_counter.most_common(20)
+        word_id_to_freq = {k: word_counter[v] for k, v in id_to_word.items()}
+        with open(os.path.join(settings.output_dir, 'id_to_freq.json'), 'w') as f:
+            json.dump(word_id_to_freq, f)
+
+        print('Top tokens:')
+        for w, cnt in top_words:
+            print('{}: {}'.format(w, cnt))
+
     with open(os.path.join(settings.output_dir, 'id_to_img.json'), 'w') as f:
         json.dump({ind: val[0] for ind, val in enumerate(encoded_images_info)}, f)
 
