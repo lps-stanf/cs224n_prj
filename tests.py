@@ -268,8 +268,8 @@ def batched_create_captions(settings, model, images_data, image_indices, model_r
                 if cur_next_word == TokenEndIndex or cur_sent_len >= sentence_max_len:
                     batch_work_indices.remove(work_ind)
                     batch_free_indices.append(work_ind)
-                    results.append((batch_images_indices[work_ind], batch_sentences[work_ind, :cur_sent_len]
-                                    , cur_sent_len))
+                    added_sentence = list(batch_sentences[work_ind, :cur_sent_len])
+                    results.append((batch_images_indices[work_ind], added_sentence, cur_sent_len))
                     num_processed_images += 1
                     if num_processed_images % 1000 == 0:
                         printWithTimestamp('Processed {}/{} images.'.format(num_processed_images, num_total_images))
@@ -288,7 +288,7 @@ def process_batched_results(batched_results, id_to_word_dict, TokenEndIndex):
         if br_sent_len <= 0:
             printWithTimestamp('Error: Zero-length string while processing image "{}"'.format(br_img_id))
             continue
-        caption = br_sent.tolist()
+        caption = list(br_sent)
         caption.pop(0)
         if caption[-1] == TokenEndIndex:
             caption.pop()
