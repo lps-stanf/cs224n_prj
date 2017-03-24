@@ -190,8 +190,10 @@ def addPredictionLayers(model, dict_size, settings):
         bias_init -= np.max(bias_init)
         matrix_init = create_glorot_int_matrix((model.output_shape[1], dict_size))
         model.add(Dense(dict_size, weights=[matrix_init, bias_init]))
+        print('Softmax biases have been have been intialized by log of words frequencies.')
     else:
         model.add(Dense(dict_size))
+        print('Softmax biases have been intialized by 0.')
     model.add(Activation('softmax'))
 
 
@@ -426,6 +428,7 @@ def create_model(images_shape, dict_size, sentence_len, settings):
         'default_model': create_default_model,
         'LSTM_model': create_lstm_nadam_model,
 
+		'GRU_dropout': create_default_model,
         'GRU_batch_norm': create_batchnorm_model,
 
         'GRU_1_05': create_default_model,
@@ -506,9 +509,9 @@ def train_model(h5_images_train=None, h5_text_train=None, dict_size_train=None,
     image_shape = images_train.shape[1:]
 
     model = create_model(image_shape, dict_size_train, sentence_len, settings)
-    if settings.weights_filename is not None:
-        model.load_weights(settings.weights_filename)
-        print('Using start weights: "{}"'.format(settings.weights_filename))
+    if settings.weights is not None:
+        model.load_weights(settings.weights)
+        print('Using start weights: "{}"'.format(settings.weights))
 
     tb = keras.callbacks.TensorBoard(log_dir=settings.model_output_dir, histogram_freq=1, write_images=True,
                                      write_graph=True)
@@ -533,7 +536,7 @@ def main_func():
                         default='{0:%y_%m_%d_%H_%M_%S}'.format(datetime.datetime.now()), type=str)
     parser.add_argument('--cuda_devices',
                         default=None)
-    parser.add_argument('--weights_filename',
+    parser.add_argument('--weights',
                         default=None)
     parser.add_argument('--model',
                         default='default_model')
@@ -578,6 +581,7 @@ def main_func():
                 preprocessed_token_freq.append(token_freq)
     else:
         preprocessed_token_freq = None
+        print('Softmax biases are initialized with zeros.')
     settings.add_key_value('token_freq', preprocessed_token_freq)
 
     # Val data
