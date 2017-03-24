@@ -202,7 +202,7 @@ def batched_create_captions(settings, model, images_data, image_indices, model_r
 
             cur_image_path = os.path.join(coco_images_dir, images_data[cur_img_ind]['file_name'])
             preprocessed_img = preprocess_image(cur_image_path, model_resolution)
-            loaded_img_queue.put((images_data[cur_img_ind]['id'], preprocessed_img))
+            loaded_img_queue.put((cur_img_ind, preprocessed_img))
 
             # print('thread: {}; loaded: {}'.format(threading.current_thread().name, cur_image_path))
             loading_queue.task_done()
