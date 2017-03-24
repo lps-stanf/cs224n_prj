@@ -190,10 +190,10 @@ def addPredictionLayers(model, dict_size, settings):
         bias_init -= np.max(bias_init)
         matrix_init = create_glorot_int_matrix((model.output_shape[1], dict_size))
         model.add(Dense(dict_size, weights=[matrix_init, bias_init]))
-		print("Softmax biases have been have been intialized by log of words frequencies.")
+        print('Softmax biases have been have been intialized by log of words frequencies.')
     else:
         model.add(Dense(dict_size))
-		print("Softmax biases have been intialized by 0's.")
+        print('Softmax biases have been intialized by 0.')
     model.add(Activation('softmax'))
 
 
