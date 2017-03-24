@@ -202,7 +202,7 @@ def batched_create_captions(settings, model, images_data, image_indices, model_r
 
             cur_image_path = os.path.join(coco_images_dir, images_data[cur_img_ind]['file_name'])
             preprocessed_img = preprocess_image(cur_image_path, model_resolution)
-            loaded_img_queue.put((cur_img_ind, preprocessed_img))
+            loaded_img_queue.put((images_data[cur_img_ind]['id'], preprocessed_img))
 
             # print('thread: {}; loaded: {}'.format(threading.current_thread().name, cur_image_path))
             loading_queue.task_done()
@@ -321,7 +321,7 @@ def calculate_metrics(settings, model, id_to_word_dict, captions_data, coco_imag
                                                      coco_images_dir, sentence_max_len, TokenBeginIndex, TokenEndIndex)
         result_for_metrics = process_batched_results(result_for_metrics, id_to_word_dict, TokenEndIndex)
 
-    weight_filename = os.path.basename(settings.weights_filename)
+    weight_filename = os.path.basename(settings.weights)
     weight_filename = os.path.splitext(weight_filename)
     weight_filename = weight_filename[0]
 
@@ -345,7 +345,7 @@ def perform_testing(settings, id_to_word_dict, captions_data=None, coco_images_d
     TokenEndIndex = find_token_index(id_to_word_dict, TokenEnd)
 
     model = create_model(image_shape, dict_size, sentence_max_len, settings)
-    model.load_weights(settings.weights_filename)
+    model.load_weights(settings.weights)
 
     if captions_data is not None and coco_images_dir is not None and coco_num_images is not None \
             and coco_out_path is not None:
@@ -359,7 +359,7 @@ def perform_testing(settings, id_to_word_dict, captions_data=None, coco_images_d
 
 def main_func():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights_filename', required=True)
+    parser.add_argument('--weights', required=True)
     parser.add_argument('--cuda_devices',
                         default=None)
     parser.add_argument('--model',
